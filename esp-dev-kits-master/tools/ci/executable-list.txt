@@ -1,0 +1,6 @@
+tools/ci/check_executables.py
+tools/ci/check_readme_links.py
+tools/ci/format.sh
+tools/ci/push_to_github.sh
+docs/conf_common.py
+docs/requirements.txt

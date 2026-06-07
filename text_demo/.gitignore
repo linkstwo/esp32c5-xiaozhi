@@ -1,0 +1,20 @@
+# Build output
+build/
+**/build/
+
+# Managed/dependency components
+managed_components/
+
+# ESP-IDF
+sdkconfig
+sdkconfig.old
+*.pyc
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store

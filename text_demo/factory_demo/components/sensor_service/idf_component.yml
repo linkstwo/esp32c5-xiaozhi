@@ -1,0 +1,16 @@
+version: "1.0.0"
+description: "BME690 environmental sensor service with BSEC IAQ"
+dependencies:
+  idf: ">=5.5"
+  bme690_sensor:
+    path: "../bme690_sensor"
+    public: true
+  bsec_iaq:
+    path: "../bsec_iaq"
+    public: true
+  espressif/i2c_bus:
+    public: true
+    version: ^1.0.0
+  espressif/esp_board_manager:
+    public: true
+    version: ^0.5

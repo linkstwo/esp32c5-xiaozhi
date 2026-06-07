@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:\\\\Users\\\\wzb\\\\Desktop\\\\code\\\\esp32_code\\\\text_demo\\\\demo\" log --oneline -10)",
+      "Bash(grep -E \"\\\\.\\(c|h\\)$\")"
+    ]
+  }
+}

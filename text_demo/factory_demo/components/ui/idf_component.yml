@@ -1,0 +1,7 @@
+version: "1.0.0"
+description: "SquareLine Studio Smart_Gadget UI ported for ESP-IDF"
+dependencies:
+  idf: ">=5.5"
+  lvgl/lvgl:
+    public: true
+    version: ">=9,<10"

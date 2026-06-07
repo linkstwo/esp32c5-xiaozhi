@@ -1,1 +1,0 @@
-# esp32c5-xiaozhi
