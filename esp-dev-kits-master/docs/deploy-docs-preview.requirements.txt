@@ -1,3 +1,0 @@
-linuxdoc
-urllib3
-python-gitlab

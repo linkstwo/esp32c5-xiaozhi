@@ -1,7 +1,0 @@
-version: "1.0.0"
-description: "BME690 sensor driver with I2C interface layer"
-dependencies:
-  idf: ">=5.5"
-  espressif/i2c_bus:
-    public: true
-    version: ^1.0.0

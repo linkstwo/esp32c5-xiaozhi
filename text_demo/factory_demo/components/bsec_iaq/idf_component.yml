@@ -1,4 +1,0 @@
-version: "1.0.0"
-description: "Bosch BSEC IAQ library for BME690"
-dependencies:
-  idf: ">=5.5"
