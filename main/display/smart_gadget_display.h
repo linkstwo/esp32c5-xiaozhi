@@ -4,6 +4,7 @@
 #include "lcd_display.h"
 
 #include <atomic>
+#include <cstdint>
 #include <string>
 
 class SmartGadgetDisplay : public SpiLcdDisplay {
@@ -62,6 +63,10 @@ private:
     void UpdateCallStatus(const char* status);
     void SetObjectHidden(lv_obj_t* obj, bool hidden);
     void LoadPage(PageIndex page);
+    void EnsureSensorServiceStarted();
+    void ConfigureScreenLifecycle(lv_obj_t* screen, PageIndex page);
+    void HandleScreenLoaded(PageIndex page);
+    static void ScreenLoadedEventCallback(lv_event_t* e);
 };
 
 extern SmartGadgetDisplay* g_smart_gadget_display;

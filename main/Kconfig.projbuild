@@ -6,6 +6,14 @@ config OTA_URL
     help
         The application will access this URL to check for new firmwares and server address.
 
+config XIAOZHI_ENABLE_WEBSOCKET_PROTOCOL
+    bool "Enable WebSocket protocol backend"
+    default y
+    help
+        Keep the standalone WebSocket protocol implementation in the firmware.
+        Disable this on MQTT-only products to reduce code size and remove an
+        extra protocol branch from the runtime path.
+
 choice
     prompt "Flash Assets"
     default FLASH_DEFAULT_ASSETS if !USE_EMOTE_MESSAGE_STYLE

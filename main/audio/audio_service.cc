@@ -45,8 +45,14 @@ namespace {
 // but 16x pushes idle free SRAM too low for MQTT/TLS on this board.
 constexpr uint32_t kOpusCodecTaskStackBytes = 2048 * 14;
 constexpr uint32_t kOpusCodecStackLogInterval = 20;
-constexpr size_t kMinHeapForSoundPlayback = 16 * 1024;
-constexpr size_t kMinLargestBlockForSoundPlayback = 14 * 1024;
+constexpr size_t kMinHeapForSoundPlayback = 20 * 1024;
+constexpr size_t kMinLargestBlockForSoundPlayback = 16 * 1024;
+constexpr size_t kMinHeapForSoundQueuePacket = 18 * 1024;
+constexpr size_t kMinLargestBlockForSoundQueuePacket = 14 * 1024;
+#if CONFIG_IDF_TARGET_ESP32C5
+constexpr size_t kMinHeapForWakeWordInit = 24 * 1024;
+constexpr size_t kMinLargestBlockForWakeWordInit = 18 * 1024;
+#endif
 }
 
 AudioService::AudioService() {
@@ -371,61 +377,75 @@ void AudioService::OpusCodecTask() {
             audio_queue_cv_.notify_all();
             lock.unlock();
 
-            auto task = std::make_unique<AudioTask>();
-            task->type = kAudioTaskTypeDecodeToPlaybackQueue;
-            task->timestamp = packet->timestamp;
+            try {
+                auto task = std::make_unique<AudioTask>();
+                task->type = kAudioTaskTypeDecodeToPlaybackQueue;
+                task->timestamp = packet->timestamp;
 
-            if (!SetDecodeSampleRate(packet->sample_rate, packet->frame_duration)) {
-                debug_statistics_.decode_count++;
-                lock.lock();
-                continue;
-            }
-            if (opus_decoder_ != nullptr) {
-                task->pcm.resize(decoder_frame_size_);
-                esp_audio_dec_in_raw_t raw = {
-                    .buffer = (uint8_t *)(packet->payload.data()),
-                    .len = (uint32_t)(packet->payload.size()),
-                    .consumed = 0,
-                    .frame_recover = ESP_AUDIO_DEC_RECOVERY_NONE,
-                };
-                esp_audio_dec_out_frame_t out_frame = {
-                    .buffer = (uint8_t *)(task->pcm.data()),
-                    .len = (uint32_t)(task->pcm.size() * sizeof(int16_t)),
-                    .decoded_size = 0,
-                };
-                esp_audio_dec_info_t dec_info = {};
-                std::unique_lock<std::mutex> decoder_lock(decoder_mutex_);
-                auto ret = esp_opus_dec_decode(opus_decoder_, &raw, &out_frame, &dec_info);
-                decoder_lock.unlock();
-                if (ret == ESP_AUDIO_ERR_OK) {
-                    task->pcm.resize(out_frame.decoded_size / sizeof(int16_t));
-                    if (decoder_sample_rate_ != codec_->output_sample_rate() && output_resampler_ != nullptr) {
-                        uint32_t target_size = 0;
-                        esp_ae_rate_cvt_get_max_out_sample_num(output_resampler_, task->pcm.size(), &target_size);
-                        std::vector<int16_t> resampled(target_size);
-                        uint32_t actual_output = target_size;
-                        esp_ae_rate_cvt_process(output_resampler_, (esp_ae_sample_t)task->pcm.data(), task->pcm.size(),
-                                                (esp_ae_sample_t)resampled.data(), &actual_output);
-                        resampled.resize(actual_output);
-                        task->pcm = std::move(resampled);
-                    }
-                    lock.lock();
-                    audio_playback_queue_.push_back(std::move(task));
-                    audio_queue_cv_.notify_all();
+                if (!SetDecodeSampleRate(packet->sample_rate, packet->frame_duration)) {
                     debug_statistics_.decode_count++;
-                    if ((debug_statistics_.decode_count % kOpusCodecStackLogInterval) == 0) {
-                        ESP_LOGI(TAG, "Opus codec task: decode_count=%lu stack_high_water=%u free_heap=%u largest_8bit=%u",
-                                 (unsigned long)debug_statistics_.decode_count,
-                                 static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)),
-                                 static_cast<unsigned>(esp_get_free_heap_size()),
-                                 static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+                    lock.lock();
+                    continue;
+                }
+                if (opus_decoder_ != nullptr) {
+                    task->pcm.resize(decoder_frame_size_);
+                    esp_audio_dec_in_raw_t raw = {
+                        .buffer = (uint8_t *)(packet->payload.data()),
+                        .len = (uint32_t)(packet->payload.size()),
+                        .consumed = 0,
+                        .frame_recover = ESP_AUDIO_DEC_RECOVERY_NONE,
+                    };
+                    esp_audio_dec_out_frame_t out_frame = {
+                        .buffer = (uint8_t *)(task->pcm.data()),
+                        .len = (uint32_t)(task->pcm.size() * sizeof(int16_t)),
+                        .decoded_size = 0,
+                    };
+                    esp_audio_dec_info_t dec_info = {};
+                    std::unique_lock<std::mutex> decoder_lock(decoder_mutex_);
+                    auto ret = esp_opus_dec_decode(opus_decoder_, &raw, &out_frame, &dec_info);
+                    decoder_lock.unlock();
+                    if (ret == ESP_AUDIO_ERR_OK) {
+                        task->pcm.resize(out_frame.decoded_size / sizeof(int16_t));
+                        if (decoder_sample_rate_ != codec_->output_sample_rate() && output_resampler_ != nullptr) {
+                            uint32_t target_size = 0;
+                            esp_ae_rate_cvt_get_max_out_sample_num(output_resampler_, task->pcm.size(), &target_size);
+                            std::vector<int16_t> resampled(target_size);
+                            uint32_t actual_output = target_size;
+                            esp_ae_rate_cvt_process(output_resampler_, (esp_ae_sample_t)task->pcm.data(), task->pcm.size(),
+                                                    (esp_ae_sample_t)resampled.data(), &actual_output);
+                            resampled.resize(actual_output);
+                            task->pcm = std::move(resampled);
+                        }
+                        lock.lock();
+                        audio_playback_queue_.push_back(std::move(task));
+                        audio_queue_cv_.notify_all();
+                        debug_statistics_.decode_count++;
+                        if ((debug_statistics_.decode_count % kOpusCodecStackLogInterval) == 0) {
+                            ESP_LOGI(TAG, "Opus codec task: decode_count=%lu stack_high_water=%u free_heap=%u largest_8bit=%u",
+                                     (unsigned long)debug_statistics_.decode_count,
+                                     static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)),
+                                     static_cast<unsigned>(esp_get_free_heap_size()),
+                                     static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+                        }
+                    } else {
+                        ESP_LOGE(TAG, "Failed to decode audio after resize, error code: %d", ret);
+                        lock.lock();
                     }
                 } else {
-                    ESP_LOGE(TAG, "Failed to decode audio after resize, error code: %d", ret);
+                    ESP_LOGE(TAG, "Audio decoder is not configured");
                     lock.lock();
                 }
-            } else {
-                ESP_LOGE(TAG, "Audio decoder is not configured");
+            } catch (const std::bad_alloc&) {
+                ESP_LOGE(TAG,
+                         "Drop decoded audio packet due to bad_alloc: payload=%u sample_rate=%d frame_duration=%d free_heap=%u largest_8bit=%u",
+                         static_cast<unsigned>(packet->payload.size()),
+                         packet->sample_rate,
+                         packet->frame_duration,
+                         static_cast<unsigned>(esp_get_free_heap_size()),
+                         static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)));
+                lock.lock();
+            } catch (...) {
+                ESP_LOGE(TAG, "Drop decoded audio packet due to unexpected exception");
                 lock.lock();
             }
             debug_statistics_.decode_count++;
@@ -632,6 +652,17 @@ void AudioService::EnableWakeWordDetection(bool enable) {
     ESP_LOGD(TAG, "%s wake word detection", enable ? "Enabling" : "Disabling");
     if (enable) {
         if (!wake_word_initialized_) {
+#if CONFIG_IDF_TARGET_ESP32C5
+            const size_t free_heap = esp_get_free_heap_size();
+            const size_t largest_8bit = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+            if (free_heap < kMinHeapForWakeWordInit || largest_8bit < kMinLargestBlockForWakeWordInit) {
+                ESP_LOGW(TAG,
+                         "Skip wake word initialization due to low memory: free_heap=%u largest_8bit=%u",
+                         static_cast<unsigned>(free_heap),
+                         static_cast<unsigned>(largest_8bit));
+                return;
+            }
+#endif
             if (!wake_word_->Initialize(codec_, models_list_)) {
                 ESP_LOGE(TAG, "Failed to initialize wake word");
                 return;
@@ -729,22 +760,44 @@ void AudioService::PlaySound(const std::string_view& ogg) {
 
     std::lock_guard<std::mutex> demuxer_lock(sound_demuxer_mutex_);
     if (sound_demuxer_ == nullptr) {
-        sound_demuxer_.reset(new (std::nothrow) OggDemuxer());
-        if (sound_demuxer_ == nullptr) {
+        auto* demuxer = new (std::nothrow) OggDemuxer();
+        if (demuxer == nullptr) {
             ESP_LOGE(TAG, "Failed to allocate sound demuxer");
             return;
         }
+        demuxer->OnDemuxerFinished([this](const uint8_t* data, int sample_rate, size_t size) {
+            const size_t packet_free_heap = esp_get_free_heap_size();
+            const size_t packet_largest_8bit = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+            if (packet_free_heap < kMinHeapForSoundQueuePacket ||
+                packet_largest_8bit < kMinLargestBlockForSoundQueuePacket) {
+                ESP_LOGW(TAG,
+                         "Drop sound packet due to low memory: free_heap=%u largest_8bit=%u sample_rate=%d size=%u",
+                         static_cast<unsigned>(packet_free_heap),
+                         static_cast<unsigned>(packet_largest_8bit),
+                         sample_rate,
+                         static_cast<unsigned>(size));
+                return;
+            }
+
+            try {
+                auto packet = std::make_unique<AudioStreamPacket>();
+                packet->sample_rate = sample_rate;
+                packet->frame_duration = 60;
+                packet->payload.resize(size);
+                std::memcpy(packet->payload.data(), data, size);
+                if (!PushPacketToDecodeQueue(std::move(packet), false)) {
+                    ESP_LOGW(TAG, "Drop sound packet because decode queue is full");
+                }
+            } catch (const std::bad_alloc&) {
+                ESP_LOGE(TAG, "Drop sound packet due to bad_alloc");
+            } catch (...) {
+                ESP_LOGE(TAG, "Drop sound packet due to unexpected exception");
+            }
+        });
+        sound_demuxer_.reset(demuxer);
     }
 
     try {
-        sound_demuxer_->OnDemuxerFinished([this](const uint8_t* data, int sample_rate, size_t size) {
-            auto packet = std::make_unique<AudioStreamPacket>();
-            packet->sample_rate = sample_rate;
-            packet->frame_duration = 60;
-            packet->payload.resize(size);
-            std::memcpy(packet->payload.data(), data, size);
-            PushPacketToDecodeQueue(std::move(packet), true);
-        });
         sound_demuxer_->Reset();
         sound_demuxer_->Process(buf, size);
     } catch (const std::bad_alloc&) {

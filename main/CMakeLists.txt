@@ -28,7 +28,6 @@ set(SOURCES "audio/audio_codec.cc"
             "display/lvgl_display/jpg/jpeg_to_image.c"
             "protocols/protocol.cc"
             "protocols/mqtt_protocol.cc"
-            "protocols/websocket_protocol.cc"
             "mcp_server.cc"
             "system_info.cc"
             "application.cc"
@@ -38,6 +37,10 @@ set(SOURCES "audio/audio_codec.cc"
             "assets.cc"
             "main.cc"
             )
+
+if(CONFIG_XIAOZHI_ENABLE_WEBSOCKET_PROTOCOL)
+    list(APPEND SOURCES "protocols/websocket_protocol.cc")
+endif()
 
 if(CONFIG_BOARD_TYPE_ESP_SENSAIRSHUTTLE)
     list(APPEND SOURCES

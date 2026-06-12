@@ -4,7 +4,9 @@
 #include "system_info.h"
 #include "audio_codec.h"
 #include "mqtt_protocol.h"
+#if CONFIG_XIAOZHI_ENABLE_WEBSOCKET_PROTOCOL
 #include "websocket_protocol.h"
+#endif
 #include "assets/lang_config.h"
 #include "mcp_server.h"
 #include "assets.h"
@@ -65,13 +67,6 @@ bool Application::SetDeviceState(DeviceState state) {
 void Application::Initialize() {
     auto& board = Board::GetInstance();
 
-#if CONFIG_BOARD_TYPE_ESP_SENSAIRSHUTTLE
-    esp_err_t sensor_ret = SensorService::getInstance().init();
-    if (sensor_ret != ESP_OK) {
-        ESP_LOGW(TAG, "BME690/BSEC sensor service init failed: %s", esp_err_to_name(sensor_ret));
-    }
-#endif
-
     SetDeviceState(kDeviceStateStarting);
 
     // Setup the display
@@ -104,11 +99,6 @@ void Application::Initialize() {
 
     // Start the clock timer to update the status bar
     esp_timer_start_periodic(clock_timer_handle_, 1000000);
-
-    // Add MCP common tools (only once during initialization)
-    auto& mcp_server = McpServer::GetInstance();
-    mcp_server.AddCommonTools();
-    mcp_server.AddUserOnlyTools();
 
     // Set network event callback for UI updates and network state handling
     board.SetNetworkEventCallback([this](NetworkEvent event, const std::string& data) {
@@ -493,8 +483,14 @@ void Application::InitializeProtocol() {
 
     if (ota_->HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
+#if CONFIG_XIAOZHI_ENABLE_WEBSOCKET_PROTOCOL
     } else if (ota_->HasWebsocketConfig()) {
         protocol_ = std::make_unique<WebsocketProtocol>();
+#else
+    } else if (ota_->HasWebsocketConfig()) {
+        ESP_LOGW(TAG, "WebSocket config found, but WebSocket protocol is disabled. Falling back to MQTT");
+        protocol_ = std::make_unique<MqttProtocol>();
+#endif
     } else {
         ESP_LOGW(TAG, "No protocol specified in the OTA config, using MQTT");
         protocol_ = std::make_unique<MqttProtocol>();
@@ -580,6 +576,7 @@ void Application::InitializeProtocol() {
         } else if (strcmp(type->valuestring, "mcp") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
             if (cJSON_IsObject(payload)) {
+                EnsureMcpServerInitialized();
                 McpServer::GetInstance().ParseMessage(payload);
             }
         } else if (strcmp(type->valuestring, "system") == 0) {
@@ -622,6 +619,17 @@ void Application::InitializeProtocol() {
     });
     
     protocol_->Start();
+}
+
+void Application::EnsureMcpServerInitialized() {
+    if (mcp_server_initialized_) {
+        return;
+    }
+
+    auto& mcp_server = McpServer::GetInstance();
+    mcp_server.AddCommonTools();
+    mcp_server.AddUserOnlyTools();
+    mcp_server_initialized_ = true;
 }
 
 void Application::ShowActivationCode(const std::string& code, const std::string& message) {
@@ -749,6 +757,10 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
     // Switch to performance mode before connecting to reduce latency
     auto& board = Board::GetInstance();
     board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+
+    // Drop pending prompt/audio residue before the next handshake attempt.
+    audio_service_.EnableWakeWordDetection(false);
+    audio_service_.ResetDecoder();
 
     if (!protocol_->IsAudioChannelOpened()) {
         if (!protocol_->OpenAudioChannel()) {

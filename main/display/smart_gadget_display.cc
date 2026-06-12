@@ -7,6 +7,7 @@
 #include "smart_gadget_ui/ui.h"
 
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <esp_log.h>
@@ -140,6 +141,7 @@ void SmartGadgetDisplay::ApplyWeatherText() {
         return;
     }
 
+    EnsureSensorServiceStarted();
     SensorData sensor_data = {};
     const bool has_sensor_data = SensorService::getInstance().getLatestData(sensor_data);
     char temp_text[24];
@@ -218,6 +220,7 @@ void SmartGadgetDisplay::ApplyDeviceText() {
         return;
     }
 
+    EnsureSensorServiceStarted();
     const bool has_user_message = !user_message_.empty();
     const bool has_assistant_message = !assistant_message_.empty();
     SensorData sensor_data = {};
@@ -391,15 +394,26 @@ void SmartGadgetDisplay::BindCallButtons() {
 }
 
 void SmartGadgetDisplay::OnSquareLineScreenCreated(lv_obj_t* screen) {
-    if (screen == ui_Call) {
+    if (screen == ui_Clock) {
+        ConfigureScreenLifecycle(screen, kPageClock);
+    } else if (screen == ui_Call) {
+        ConfigureScreenLifecycle(screen, kPageCall);
         ApplyCallText();
     } else if (screen == ui_Chat) {
+        ConfigureScreenLifecycle(screen, kPageChat);
         ApplyChatText();
+    } else if (screen == ui_Music_Player) {
+        ConfigureScreenLifecycle(screen, kPageMusic);
     } else if (screen == ui_Weather) {
+        ConfigureScreenLifecycle(screen, kPageWeather);
         ApplyWeatherText();
+    } else if (screen == ui_Alarm) {
+        ConfigureScreenLifecycle(screen, kPageAlarm);
     } else if (screen == ui_Device) {
+        ConfigureScreenLifecycle(screen, kPageDevice);
         ApplyDeviceText();
     } else if (screen == ui_Splash) {
+        ConfigureScreenLifecycle(screen, kPageSplash);
         ApplyInitialText();
     }
 }
@@ -433,6 +447,45 @@ void SmartGadgetDisplay::UpdateCallStatus(const char* status) {
     }
     ApplyWeatherText();
     ApplyDeviceText();
+}
+
+void SmartGadgetDisplay::EnsureSensorServiceStarted() {
+#if CONFIG_BOARD_TYPE_ESP_SENSAIRSHUTTLE
+    auto& sensor_service = SensorService::getInstance();
+    if (sensor_service.isInitialized()) {
+        return;
+    }
+
+    esp_err_t sensor_ret = sensor_service.init();
+    if (sensor_ret != ESP_OK) {
+        ESP_LOGW(TAG, "BME690/BSEC sensor service lazy init failed: %s", esp_err_to_name(sensor_ret));
+    }
+#endif
+}
+
+void SmartGadgetDisplay::ConfigureScreenLifecycle(lv_obj_t* screen, PageIndex page) {
+    if (screen == nullptr) {
+        return;
+    }
+
+    lv_obj_add_event_cb(screen, ScreenLoadedEventCallback, LV_EVENT_SCREEN_LOADED,
+                        reinterpret_cast<void*>(static_cast<intptr_t>(page)));
+}
+
+void SmartGadgetDisplay::HandleScreenLoaded(PageIndex page) {
+    current_page_ = page;
+    if (page == kPageWeather || page == kPageDevice) {
+        EnsureSensorServiceStarted();
+    }
+}
+
+void SmartGadgetDisplay::ScreenLoadedEventCallback(lv_event_t* e) {
+    if (g_smart_gadget_display == nullptr) {
+        return;
+    }
+
+    auto page = static_cast<PageIndex>(reinterpret_cast<intptr_t>(lv_event_get_user_data(e)));
+    g_smart_gadget_display->HandleScreenLoaded(page);
 }
 
 void SmartGadgetDisplay::SetStatus(const char* status) {
@@ -565,6 +618,7 @@ void SmartGadgetDisplay::LoadPage(PageIndex page) {
             if (ui_Weather == nullptr) {
                 ui_Weather_screen_init();
             }
+            EnsureSensorServiceStarted();
             ApplyWeatherText();
             lv_screen_load_anim(ui_Weather, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, false);
             break;
@@ -578,6 +632,7 @@ void SmartGadgetDisplay::LoadPage(PageIndex page) {
             if (ui_Device == nullptr) {
                 ui_Device_screen_init();
             }
+            EnsureSensorServiceStarted();
             ApplyDeviceText();
             lv_screen_load_anim(ui_Device, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, false);
             break;
