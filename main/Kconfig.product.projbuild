@@ -1,0 +1,82 @@
+menu "ESP32-C5 XiaoZhi Product"
+
+config OTA_URL
+    string "Default OTA URL"
+    default "https://api.tenclass.net/xiaozhi/ota/"
+    help
+        OTA and server configuration endpoint used by the product firmware.
+
+config XIAOZHI_ENABLE_WEBSOCKET_PROTOCOL
+    bool "Enable WebSocket protocol backend"
+    default n
+    help
+        Product firmware uses MQTT + UDP by default. Keep this disabled unless
+        a future product variant explicitly needs WebSocket.
+
+choice
+    prompt "Flash Assets"
+    default FLASH_DEFAULT_ASSETS
+
+    config FLASH_NONE_ASSETS
+        bool "Do not flash assets"
+    config FLASH_DEFAULT_ASSETS
+        bool "Flash Default Assets"
+    config FLASH_CUSTOM_ASSETS
+        bool "Flash Custom Assets"
+endchoice
+
+config CUSTOM_ASSETS_FILE
+    depends on FLASH_CUSTOM_ASSETS
+    string "Custom Assets File"
+    default "assets.bin"
+
+choice
+    prompt "Default Language"
+    default LANGUAGE_ZH_CN
+
+    config LANGUAGE_ZH_CN
+        bool "Chinese Simplified"
+endchoice
+
+choice BOARD_TYPE
+    prompt "Board Type"
+    default BOARD_TYPE_ESP_SENSAIRSHUTTLE
+
+    config BOARD_TYPE_ESP_SENSAIRSHUTTLE
+        bool "ESP32-C5 XiaoZhi Product Board / ESP-SensairShuttle"
+        depends on IDF_TARGET_ESP32C5
+endchoice
+
+config USE_AUDIO_PROCESSOR
+    bool "Use AFE audio processor"
+    default n
+    help
+        Keep disabled for the ESP32-C5 product baseline. Raw mic passthrough is
+        lighter and easier to stabilize.
+
+config USE_SERVER_AEC
+    bool "Use server-side AEC"
+    default n
+
+config USE_ESP_WAKE_WORD
+    bool "Use ESP wake word"
+    default n
+    help
+        Disabled in the product baseline to reduce memory pressure. Re-enable
+        only after the MQTT + UDP voice path is stable.
+
+config WAKE_WORD_DISABLED
+    bool "Disable wake word"
+    default y
+
+config USE_EMOTE_MESSAGE_STYLE
+    bool "Use emote display style"
+    default n
+    help
+        Product baseline uses SmartGadgetDisplay, not EmoteDisplay.
+
+config CODEC_DATA_ADC_SUPPORT
+    bool "Enable ADC microphone codec support"
+    default y
+
+endmenu
