@@ -8,13 +8,13 @@
 #include <freertos/task.h>
 
 #include "application.h"
-#include "ssid_manager.h"
 
 #define TAG "main"
 
 extern "C" void app_main(void)
 {
-    // Initialize NVS flash for WiFi configuration
+    // Initialize NVS flash for Wi-Fi configuration, product settings, OTA data,
+    // and other persistent state.
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOGW(TAG, "Erasing NVS flash to fix corruption");
@@ -23,10 +23,9 @@ extern "C" void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    SsidManager::GetInstance().AddSsid("bukaoyidingyaoguo", "123456789");
-
-    // Initialize and run the application
+    // Product firmware must not hard-code Wi-Fi credentials in source code.
+    // Configure Wi-Fi through the normal provisioning / stored settings path.
     auto& app = Application::GetInstance();
     app.Initialize();
-    app.Run();  // This function runs the main event loop and never returns
+    app.Run();  // This function runs the main event loop and never returns.
 }
