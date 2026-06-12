@@ -43,6 +43,8 @@ set(SOURCES
     "display/lvgl_display/lvgl_theme.cc"
     "display/lvgl_display/lvgl_font.cc"
     "display/lvgl_display/lvgl_image.cc"
+    "display/lvgl_display/gif/lvgl_gif.cc"
+    "display/lvgl_display/gif/gifdec.c"
     "display/smart_gadget_display.cc"
 
     "display/smart_gadget_ui/components/ui_comp_alarm_comp.c"
@@ -114,6 +116,7 @@ set(INCLUDE_DIRS
     "protocols"
     "display"
     "display/lvgl_display"
+    "display/lvgl_display/gif"
     "display/smart_gadget_ui"
     "display/smart_gadget_ui/components"
     "display/smart_gadget_ui/screens"
