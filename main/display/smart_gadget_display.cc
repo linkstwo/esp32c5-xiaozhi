@@ -20,6 +20,38 @@ LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
 
 SmartGadgetDisplay* g_smart_gadget_display = nullptr;
 
+namespace {
+constexpr size_t kChatPreviewMaxChars = 50;
+
+std::string TruncateUtf8Text(const std::string& text, size_t max_chars) {
+    size_t index = 0;
+    size_t count = 0;
+    while (index < text.size() && count < max_chars) {
+        const unsigned char ch = static_cast<unsigned char>(text[index]);
+        size_t char_len = 1;
+        if ((ch & 0x80) == 0) {
+            char_len = 1;
+        } else if ((ch & 0xE0) == 0xC0) {
+            char_len = 2;
+        } else if ((ch & 0xF0) == 0xE0) {
+            char_len = 3;
+        } else if ((ch & 0xF8) == 0xF0) {
+            char_len = 4;
+        }
+        if (index + char_len > text.size()) {
+            break;
+        }
+        index += char_len;
+        ++count;
+    }
+
+    if (index >= text.size()) {
+        return text;
+    }
+    return text.substr(0, index) + "...";
+}
+}  // namespace
+
 extern "C" void smart_gadget_ui_screen_created(lv_obj_t* screen) {
     if (g_smart_gadget_display != nullptr) {
         g_smart_gadget_display->OnSquareLineScreenCreated(screen);
@@ -77,26 +109,27 @@ void SmartGadgetDisplay::ApplyCallText() {
 }
 
 void SmartGadgetDisplay::ApplyChatText() {
-    const bool has_user_message = !user_message_.empty();
     const bool has_assistant_message = !assistant_message_.empty();
-    const char* assistant_text = has_assistant_message ? assistant_message_.c_str() :
-                                 (has_user_message ? "Waiting for AI..." : "Ready for chat");
+    const std::string assistant_text = has_assistant_message ?
+        TruncateUtf8Text(assistant_message_, kChatPreviewMaxChars) :
+        "Hold the button and ask";
 
     if (ui_Chat_date != nullptr) {
         ApplyReadableFont(ui_Chat_date);
-        lv_label_set_text(ui_Chat_date, "XiaoZhi Chat");
+        lv_label_set_text(ui_Chat_date, "Ask XiaoZhi");
     }
     if (ui_Chat1 != nullptr) {
         ApplyReadableFont(ui_Chat1);
         lv_label_set_long_mode(ui_Chat1, LV_LABEL_LONG_WRAP);
-        lv_label_set_text(ui_Chat1, assistant_text);
-        lv_obj_set_width(ui_Chat1, 180);
+        lv_label_set_text(ui_Chat1, assistant_text.c_str());
+        lv_obj_set_width(ui_Chat1, 184);
     }
     if (ui_Chat2 != nullptr) {
         ApplyReadableFont(ui_Chat2);
-        lv_label_set_long_mode(ui_Chat2, LV_LABEL_LONG_WRAP);
-        lv_label_set_text(ui_Chat2, user_message_.c_str());
-        lv_obj_set_width(ui_Chat2, 180);
+        lv_label_set_long_mode(ui_Chat2, LV_LABEL_LONG_CLIP);
+        lv_label_set_text(ui_Chat2, "Hold to speak");
+        lv_obj_set_width(ui_Chat2, 128);
+        lv_obj_set_style_text_align(ui_Chat2, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     }
     if (ui_Chat3 != nullptr) {
         ApplyReadableFont(ui_Chat3);
@@ -104,13 +137,13 @@ void SmartGadgetDisplay::ApplyChatText() {
     }
     if (ui_Delifered != nullptr) {
         ApplyReadableFont(ui_Delifered);
-        lv_label_set_text(ui_Delifered, has_user_message ? "Sent" : "");
+        lv_label_set_text(ui_Delifered, "");
     }
 
-    user_message_visible_ = has_user_message;
+    user_message_visible_ = false;
     assistant_message_visible_ = true;
     SetObjectHidden(ui_C1, false);
-    SetObjectHidden(ui_C2, !user_message_visible_);
+    SetObjectHidden(ui_C2, false);
     SetObjectHidden(ui_C3, true);
     SetObjectHidden(ui_Chat_Icon1, true);
     SetObjectHidden(ui_Chat_Icon2, true);
@@ -128,12 +161,18 @@ void SmartGadgetDisplay::ApplyChatText() {
     }
     if (ui_C1 != nullptr && ui_Chat_Panel1 != nullptr) {
         lv_obj_set_height(ui_C1, LV_SIZE_CONTENT);
+        lv_obj_set_width(ui_Chat_Panel1, 204);
         lv_obj_set_height(ui_Chat_Panel1, LV_SIZE_CONTENT);
+        lv_obj_set_align(ui_Chat_Panel1, LV_ALIGN_TOP_MID);
     }
     if (ui_C2 != nullptr && ui_Chat_Panel2 != nullptr) {
         lv_obj_set_height(ui_C2, LV_SIZE_CONTENT);
-        lv_obj_set_height(ui_Chat_Panel2, LV_SIZE_CONTENT);
+        lv_obj_set_width(ui_Chat_Panel2, 152);
+        lv_obj_set_height(ui_Chat_Panel2, 44);
+        lv_obj_set_align(ui_Chat_Panel2, LV_ALIGN_TOP_MID);
+        lv_obj_set_style_radius(ui_Chat_Panel2, 22, LV_PART_MAIN);
     }
+    BindChatButton();
 }
 
 void SmartGadgetDisplay::ApplyWeatherText() {
@@ -377,6 +416,30 @@ static void smart_gadget_answer_event_cb(lv_event_t* e) {
     }
 }
 
+static void smart_gadget_chat_speak_event_cb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_PRESSED) {
+        if (ui_Chat2 != nullptr) {
+            lv_label_set_text(ui_Chat2, "Listening...");
+        }
+        auto& app = Application::GetInstance();
+        if (app.GetDeviceState() == kDeviceStateIdle) {
+            app.ToggleChatState();
+        }
+    } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        if (ui_Chat2 != nullptr) {
+            lv_label_set_text(ui_Chat2, "Hold to speak");
+        }
+        auto& app = Application::GetInstance();
+        auto state = app.GetDeviceState();
+        if (state == kDeviceStateListening) {
+            app.StopListening();
+        } else if (state == kDeviceStateConnecting) {
+            app.HangupChat();
+        }
+    }
+}
+
 void SmartGadgetDisplay::BindCallButtons() {
     if (call_buttons_bound_ || ui_Call_Incon1 == nullptr || ui_Call_Incon2 == nullptr) {
         return;
@@ -391,6 +454,19 @@ void SmartGadgetDisplay::BindCallButtons() {
     lv_obj_add_event_cb(ui_Call_Incon2, smart_gadget_answer_event_cb, LV_EVENT_CLICKED, nullptr);
 
     call_buttons_bound_ = true;
+}
+
+void SmartGadgetDisplay::BindChatButton() {
+    if (chat_button_bound_ || ui_Chat_Panel2 == nullptr) {
+        return;
+    }
+
+    lv_obj_add_flag(ui_Chat_Panel2, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(ui_Chat_Panel2, smart_gadget_chat_speak_event_cb, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(ui_Chat_Panel2, smart_gadget_chat_speak_event_cb, LV_EVENT_RELEASED, nullptr);
+    lv_obj_add_event_cb(ui_Chat_Panel2, smart_gadget_chat_speak_event_cb, LV_EVENT_PRESS_LOST, nullptr);
+
+    chat_button_bound_ = true;
 }
 
 void SmartGadgetDisplay::OnSquareLineScreenCreated(lv_obj_t* screen) {

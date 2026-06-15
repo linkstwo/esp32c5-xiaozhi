@@ -45,6 +45,7 @@ private:
     bool user_message_visible_ = false;
     bool assistant_message_visible_ = false;
     bool call_buttons_bound_ = false;
+    bool chat_button_bound_ = false;
     lv_timer_t* live_data_timer_ = nullptr;
     std::string call_status_ = "Preparing...";
     std::string user_message_;
@@ -58,6 +59,7 @@ private:
     void ApplyClockText(const struct tm& timeinfo);
     void ApplyReadableFont(lv_obj_t* obj);
     void BindCallButtons();
+    void BindChatButton();
     void RefreshLiveData();
     static void LiveDataTimerCallback(lv_timer_t* timer);
     void UpdateCallStatus(const char* status);
