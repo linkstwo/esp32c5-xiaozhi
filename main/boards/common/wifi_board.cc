@@ -10,6 +10,7 @@
 #include <freertos/task.h>
 #include <esp_network.h>
 #include <esp_log.h>
+#include <algorithm>
 #include <utility>
 
 #include <font_awesome.h>
@@ -25,6 +26,12 @@ static const char *TAG = "WifiBoard";
 
 // Connection timeout in seconds
 static constexpr int CONNECT_TIMEOUT_SEC = 60;
+
+namespace {
+// Quick-edit Wi-Fi credentials: update these two strings when the router password changes.
+constexpr char kQuickWifiSsid[] = "stonehotel";
+constexpr char kQuickWifiPassword[] = "86222136";
+}
 
 WifiBoard::WifiBoard() {
     // Create connection timeout timer
@@ -82,8 +89,28 @@ void WifiBoard::StartNetwork() {
         }
     });
 
+    ApplyQuickWifiCredentials();
+
     // Try to connect or enter config mode
     TryWifiConnect();
+}
+
+void WifiBoard::ApplyQuickWifiCredentials() {
+    if (kQuickWifiSsid[0] == '\0') {
+        return;
+    }
+
+    auto& ssid_manager = SsidManager::GetInstance();
+    const auto& ssid_list = ssid_manager.GetSsidList();
+    auto it = std::find_if(ssid_list.begin(), ssid_list.end(), [](const SsidItem& item) {
+        return item.ssid == kQuickWifiSsid && item.password == kQuickWifiPassword;
+    });
+    if (it != ssid_list.end()) {
+        return;
+    }
+
+    ESP_LOGI(TAG, "Apply quick WiFi credentials for SSID: %s", kQuickWifiSsid);
+    ssid_manager.AddSsid(kQuickWifiSsid, kQuickWifiPassword);
 }
 
 void WifiBoard::TryWifiConnect() {

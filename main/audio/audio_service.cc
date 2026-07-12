@@ -601,11 +601,18 @@ void AudioService::PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t
     audio_queue_cv_.notify_all();
 }
 
-bool AudioService::PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait) {
+bool AudioService::PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait,
+                                           const std::function<bool()>& cancel_wait) {
     std::unique_lock<std::mutex> lock(audio_queue_mutex_);
     if (audio_decode_queue_.size() >= MAX_DECODE_PACKETS_IN_QUEUE) {
         if (wait) {
-            audio_queue_cv_.wait(lock, [this]() { return audio_decode_queue_.size() < MAX_DECODE_PACKETS_IN_QUEUE; });
+            audio_queue_cv_.wait(lock, [this, &cancel_wait]() {
+                return audio_decode_queue_.size() < MAX_DECODE_PACKETS_IN_QUEUE ||
+                    (cancel_wait && cancel_wait()) || service_stopped_;
+            });
+            if (service_stopped_ || (cancel_wait && cancel_wait())) {
+                return false;
+            }
         } else {
             return false;
         }
@@ -740,6 +747,24 @@ void AudioService::SetCallbacks(AudioServiceCallbacks& callbacks) {
 }
 
 void AudioService::PlaySound(const std::string_view& ogg) {
+    PlaySoundInternal(ogg, false, {});
+}
+
+void AudioService::PlaySoundBlocking(const std::string_view& ogg) {
+    PlaySoundInternal(ogg, true, {});
+}
+
+void AudioService::PlaySoundBlocking(const std::string_view& ogg, const std::function<bool()>& cancel_playback) {
+    PlaySoundInternal(ogg, true, cancel_playback);
+}
+
+bool AudioService::ShouldCancelSoundPlayback() {
+    std::lock_guard<std::mutex> lock(sound_playback_state_mutex_);
+    return sound_cancel_playback_ && sound_cancel_playback_();
+}
+
+void AudioService::PlaySoundInternal(const std::string_view& ogg, bool wait_for_queue,
+                                     const std::function<bool()>& cancel_playback) {
     const size_t free_heap = esp_get_free_heap_size();
     const size_t largest_8bit = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     if (free_heap < kMinHeapForSoundPlayback || largest_8bit < kMinLargestBlockForSoundPlayback) {
@@ -759,6 +784,11 @@ void AudioService::PlaySound(const std::string_view& ogg) {
     size_t size = ogg.size();
 
     std::lock_guard<std::mutex> demuxer_lock(sound_demuxer_mutex_);
+    {
+        std::lock_guard<std::mutex> playback_lock(sound_playback_state_mutex_);
+        sound_wait_for_queue_ = wait_for_queue;
+        sound_cancel_playback_ = cancel_playback;
+    }
     if (sound_demuxer_ == nullptr) {
         auto* demuxer = new (std::nothrow) OggDemuxer();
         if (demuxer == nullptr) {
@@ -766,6 +796,10 @@ void AudioService::PlaySound(const std::string_view& ogg) {
             return;
         }
         demuxer->OnDemuxerFinished([this](const uint8_t* data, int sample_rate, size_t size) {
+            if (ShouldCancelSoundPlayback()) {
+                return;
+            }
+
             const size_t packet_free_heap = esp_get_free_heap_size();
             const size_t packet_largest_8bit = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
             if (packet_free_heap < kMinHeapForSoundQueuePacket ||
@@ -785,7 +819,14 @@ void AudioService::PlaySound(const std::string_view& ogg) {
                 packet->frame_duration = 60;
                 packet->payload.resize(size);
                 std::memcpy(packet->payload.data(), data, size);
-                if (!PushPacketToDecodeQueue(std::move(packet), false)) {
+                bool wait = false;
+                std::function<bool()> cancel_wait;
+                {
+                    std::lock_guard<std::mutex> playback_lock(sound_playback_state_mutex_);
+                    wait = sound_wait_for_queue_;
+                    cancel_wait = sound_cancel_playback_;
+                }
+                if (!PushPacketToDecodeQueue(std::move(packet), wait, cancel_wait)) {
                     ESP_LOGW(TAG, "Drop sound packet because decode queue is full");
                 }
             } catch (const std::bad_alloc&) {
@@ -798,6 +839,9 @@ void AudioService::PlaySound(const std::string_view& ogg) {
     }
 
     try {
+        if (ShouldCancelSoundPlayback()) {
+            return;
+        }
         sound_demuxer_->Reset();
         sound_demuxer_->Process(buf, size);
     } catch (const std::bad_alloc&) {

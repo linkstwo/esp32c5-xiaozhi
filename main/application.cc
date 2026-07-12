@@ -25,6 +25,39 @@
 
 #define TAG "Application"
 
+namespace {
+extern const char boss_koto_30s_24k_mono_safe_ogg_start[] asm("_binary_boss_koto_30s_24k_mono_safe_ogg_start");
+extern const char boss_koto_30s_24k_mono_safe_ogg_end[] asm("_binary_boss_koto_30s_24k_mono_safe_ogg_end");
+extern const char waiting40lofi_30s_24k_mono_opus_ogg_start[] asm("_binary_waiting40lofi_30s_24k_mono_opus_ogg_start");
+extern const char waiting40lofi_30s_24k_mono_opus_ogg_end[] asm("_binary_waiting40lofi_30s_24k_mono_opus_ogg_end");
+
+struct MusicTrack {
+    const char* title;
+    const char* artist;
+    const char* start;
+    const char* end;
+};
+
+constexpr int kMusicVolume = 80;
+
+const MusicTrack kMusicTracks[] = {
+    {
+        "Boss Koto",
+        "Local OGG/Opus",
+        boss_koto_30s_24k_mono_safe_ogg_start,
+        boss_koto_30s_24k_mono_safe_ogg_end,
+    },
+    {
+        "Waiting 40 Lofi",
+        "Local OGG/Opus",
+        waiting40lofi_30s_24k_mono_opus_ogg_start,
+        waiting40lofi_30s_24k_mono_opus_ogg_end,
+    },
+};
+
+constexpr int kMusicTrackCount = static_cast<int>(sizeof(kMusicTracks) / sizeof(kMusicTracks[0]));
+}
+
 
 Application::Application() {
     event_group_ = xEventGroupCreate();
@@ -554,7 +587,9 @@ void Application::InitializeProtocol() {
                 if (cJSON_IsString(text)) {
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
                     Schedule([display, message = std::string(text->valuestring)]() {
-                        display->SetChatMessage("assistant", message.c_str());
+                        if (display != nullptr) {
+                            display->SetChatMessage("assistant", message.c_str());
+                        }
                     });
                 }
             }
@@ -1160,6 +1195,140 @@ void Application::SetAecMode(AecMode mode) {
 
 void Application::PlaySound(const std::string_view& sound) {
     audio_service_.PlaySound(sound);
+}
+
+void Application::ToggleMusicPlayback() {
+    if (music_should_play_.load()) {
+        PauseMusic();
+    } else {
+        StartMusicLoop();
+    }
+}
+
+void Application::PreviousMusicTrack() {
+    SwitchMusicTrack(-1);
+}
+
+void Application::NextMusicTrack() {
+    SwitchMusicTrack(1);
+}
+
+void Application::MusicPlaybackTask() {
+    music_is_playing_ = true;
+    while (music_should_play_.load()) {
+        const int track_index = current_music_index_.load();
+        const uint32_t generation = music_generation_.load();
+        PlayEmbeddedMusicBlocking(track_index, generation);
+        if (!music_should_play_.load()) {
+            break;
+        }
+        if (generation != music_generation_.load()) {
+            continue;
+        }
+    }
+    music_is_playing_ = false;
+    music_task_handle_ = nullptr;
+    UpdateMusicUiState(false);
+}
+
+void Application::StartMusicLoop() {
+    if (auto* codec = Board::GetInstance().GetAudioCodec()) {
+        codec->SetOutputVolume(kMusicVolume);
+    }
+
+    music_should_play_ = true;
+    music_generation_.fetch_add(1);
+    UpdateMusicUiState(true);
+    UpdateMusicTrackInfo();
+
+    if (music_task_handle_ != nullptr) {
+        return;
+    }
+
+    auto task_result = xTaskCreate([](void* arg) {
+        Application* app = static_cast<Application*>(arg);
+        app->MusicPlaybackTask();
+        vTaskDelete(nullptr);
+    }, "music_play", 4096, this, 3, &music_task_handle_);
+
+    if (task_result != pdPASS) {
+        music_should_play_ = false;
+        music_is_playing_ = false;
+        music_task_handle_ = nullptr;
+        UpdateMusicUiState(false);
+        ESP_LOGE(TAG, "Failed to create music playback task");
+    }
+}
+
+void Application::PauseMusic() {
+    music_should_play_ = false;
+    music_generation_.fetch_add(1);
+    music_is_playing_ = false;
+    audio_service_.ResetDecoder();
+    UpdateMusicUiState(false);
+    UpdateMusicTrackInfo();
+}
+
+void Application::SwitchMusicTrack(int step) {
+    const int current_index = current_music_index_.load();
+    const int next_index = (current_index + kMusicTrackCount + step) % kMusicTrackCount;
+    const bool was_playing = music_should_play_.load();
+
+    music_generation_.fetch_add(1);
+    current_music_index_ = next_index;
+    UpdateMusicTrackInfo();
+
+    if (was_playing) {
+        if (auto* codec = Board::GetInstance().GetAudioCodec()) {
+            codec->SetOutputVolume(kMusicVolume);
+        }
+        audio_service_.ResetDecoder();
+        music_should_play_ = true;
+        UpdateMusicUiState(true);
+    } else {
+        UpdateMusicUiState(false);
+    }
+}
+
+void Application::PlayEmbeddedMusicBlocking(int track_index, uint32_t generation) {
+    if (track_index < 0 || track_index >= kMusicTrackCount) {
+        return;
+    }
+
+    const auto& track = kMusicTracks[track_index];
+    const std::string_view music(
+        track.start,
+        static_cast<size_t>(track.end - track.start));
+
+    ESP_LOGI(TAG, "Music track %d size=%u generation=%u", track_index,
+             static_cast<unsigned>(music.size()),
+             static_cast<unsigned>(generation));
+
+    audio_service_.PlaySoundBlocking(music, [this, track_index, generation]() {
+        return !music_should_play_.load() ||
+               current_music_index_.load() != track_index ||
+               music_generation_.load() != generation;
+    });
+}
+
+void Application::UpdateMusicTrackInfo() {
+    const int track_index = current_music_index_.load();
+    if (track_index < 0 || track_index >= kMusicTrackCount) {
+        return;
+    }
+
+    const auto& track = kMusicTracks[track_index];
+    Schedule([title = std::string(track.title), artist = std::string(track.artist)]() {
+        auto display = Board::GetInstance().GetDisplay();
+        display->SetMusicTrackInfo(title.c_str(), artist.c_str());
+    });
+}
+
+void Application::UpdateMusicUiState(bool playing) {
+    Schedule([playing]() {
+        auto display = Board::GetInstance().GetDisplay();
+        display->SetMusicPlaying(playing);
+    });
 }
 
 void Application::ResetProtocol() {

@@ -6,10 +6,10 @@ components/ui_comp.c
 screens/ui_Splash.c
 screens/ui_Clock.c
 screens/ui_Call.c
-screens/ui_Chat.c
 screens/ui_Music_Player.c
 screens/ui_Weather.c
 screens/ui_Alarm.c
+screens/ui_Today.c
 ui.c
 components/ui_comp_hook.c
 ui_helpers.c
@@ -20,8 +20,6 @@ images/ui_img_clock_hour_png.c
 images/ui_img_clock_sec_png.c
 images/ui_img_phone_png.c
 images/ui_img_avatar_png.c
-images/ui_img_chatbox_png.c
-images/ui_img_chatbox2_png.c
 images/ui_img_play_png.c
 images/ui_img_album_png.c
 images/ui_img_backward_png.c

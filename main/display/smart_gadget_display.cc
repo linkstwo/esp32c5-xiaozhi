@@ -13,44 +13,64 @@
 #include <esp_log.h>
 #include <esp_system.h>
 #include <esp_timer.h>
+#include <font_awesome.h>
 
 #define TAG "SmartGadgetDisplay"
 
 LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
+LV_FONT_DECLARE(BUILTIN_ICON_FONT);
+LV_FONT_DECLARE(font_puhui_16_4);
 
 SmartGadgetDisplay* g_smart_gadget_display = nullptr;
 
 namespace {
-constexpr size_t kChatPreviewMaxChars = 50;
+constexpr int kFocusDurationSeconds = 25 * 60;
 
-std::string TruncateUtf8Text(const std::string& text, size_t max_chars) {
-    size_t index = 0;
-    size_t count = 0;
-    while (index < text.size() && count < max_chars) {
-        const unsigned char ch = static_cast<unsigned char>(text[index]);
-        size_t char_len = 1;
-        if ((ch & 0x80) == 0) {
-            char_len = 1;
-        } else if ((ch & 0xE0) == 0xC0) {
-            char_len = 2;
-        } else if ((ch & 0xF0) == 0xE0) {
-            char_len = 3;
-        } else if ((ch & 0xF8) == 0xF0) {
-            char_len = 4;
-        }
-        if (index + char_len > text.size()) {
-            break;
-        }
-        index += char_len;
-        ++count;
-    }
+struct CountdownTarget {
+    const char* label;
+    int year;
+    int month;
+    int day;
+};
 
-    if (index >= text.size()) {
-        return text;
+constexpr CountdownTarget kCountdownTargets[] = {
+    {"考试", 2026, 7, 1},
+    {"项目", 2026, 7, 15},
+};
+
+const char* kWeekdaysZh[] = {
+    "周日", "周一", "周二", "周三", "周四", "周五", "周六",
+};
+
+const char* GetWeekdayText(int wday) {
+    if (wday < 0 || wday > 6) {
+        return "--";
     }
-    return text.substr(0, index) + "...";
+    return kWeekdaysZh[wday];
 }
-}  // namespace
+
+int DaysUntilTarget(const struct tm& today, const CountdownTarget& target) {
+    struct tm today_midnight = today;
+    today_midnight.tm_hour = 0;
+    today_midnight.tm_min = 0;
+    today_midnight.tm_sec = 0;
+    today_midnight.tm_isdst = -1;
+
+    struct tm target_tm = {};
+    target_tm.tm_year = target.year - 1900;
+    target_tm.tm_mon = target.month - 1;
+    target_tm.tm_mday = target.day;
+    target_tm.tm_isdst = -1;
+
+    const time_t today_ts = mktime(&today_midnight);
+    const time_t target_ts = mktime(&target_tm);
+    if (today_ts == static_cast<time_t>(-1) || target_ts == static_cast<time_t>(-1)) {
+        return -1;
+    }
+    return static_cast<int>((target_ts - today_ts) / (24 * 60 * 60));
+}
+
+}
 
 extern "C" void smart_gadget_ui_screen_created(lv_obj_t* screen) {
     if (g_smart_gadget_display != nullptr) {
@@ -65,20 +85,15 @@ SmartGadgetDisplay::SmartGadgetDisplay(esp_lcd_panel_io_handle_t panel_io, esp_l
     g_smart_gadget_display = this;
 }
 
-void SmartGadgetDisplay::SetObjectHidden(lv_obj_t* obj, bool hidden) {
-    if (obj == nullptr) {
-        return;
-    }
-    if (hidden) {
-        lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
-    }
-}
-
 void SmartGadgetDisplay::ApplyReadableFont(lv_obj_t* obj) {
     if (obj != nullptr) {
         lv_obj_set_style_text_font(obj, &BUILTIN_TEXT_FONT, 0);
+    }
+}
+
+void SmartGadgetDisplay::ApplyTodayFont(lv_obj_t* obj) {
+    if (obj != nullptr) {
+        lv_obj_set_style_text_font(obj, &font_puhui_16_4, 0);
     }
 }
 
@@ -91,9 +106,14 @@ void SmartGadgetDisplay::ApplyInitialText() {
     }
 
     ApplyCallText();
-    ApplyChatText();
     ApplyWeatherText();
     ApplyDeviceText();
+    time_t now = time(nullptr);
+    struct tm timeinfo = {};
+    localtime_r(&now, &timeinfo);
+    if (timeinfo.tm_year >= (2025 - 1900)) {
+        ApplyTodayText(timeinfo);
+    }
 }
 
 void SmartGadgetDisplay::ApplyCallText() {
@@ -108,71 +128,34 @@ void SmartGadgetDisplay::ApplyCallText() {
     BindCallButtons();
 }
 
-void SmartGadgetDisplay::ApplyChatText() {
-    const bool has_assistant_message = !assistant_message_.empty();
-    const std::string assistant_text = has_assistant_message ?
-        TruncateUtf8Text(assistant_message_, kChatPreviewMaxChars) :
-        "Hold the button and ask";
-
-    if (ui_Chat_date != nullptr) {
-        ApplyReadableFont(ui_Chat_date);
-        lv_label_set_text(ui_Chat_date, "Ask XiaoZhi");
-    }
-    if (ui_Chat1 != nullptr) {
-        ApplyReadableFont(ui_Chat1);
-        lv_label_set_long_mode(ui_Chat1, LV_LABEL_LONG_WRAP);
-        lv_label_set_text(ui_Chat1, assistant_text.c_str());
-        lv_obj_set_width(ui_Chat1, 184);
-    }
-    if (ui_Chat2 != nullptr) {
-        ApplyReadableFont(ui_Chat2);
-        lv_label_set_long_mode(ui_Chat2, LV_LABEL_LONG_CLIP);
-        lv_label_set_text(ui_Chat2, "Hold to speak");
-        lv_obj_set_width(ui_Chat2, 128);
-        lv_obj_set_style_text_align(ui_Chat2, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-    }
-    if (ui_Chat3 != nullptr) {
-        ApplyReadableFont(ui_Chat3);
-        lv_label_set_text(ui_Chat3, "");
-    }
-    if (ui_Delifered != nullptr) {
-        ApplyReadableFont(ui_Delifered);
-        lv_label_set_text(ui_Delifered, "");
+void SmartGadgetDisplay::ApplyMusicButtonState() {
+    if (ui_Play_btn == nullptr) {
+        return;
     }
 
-    user_message_visible_ = false;
-    assistant_message_visible_ = true;
-    SetObjectHidden(ui_C1, false);
-    SetObjectHidden(ui_C2, false);
-    SetObjectHidden(ui_C3, true);
-    SetObjectHidden(ui_Chat_Icon1, true);
-    SetObjectHidden(ui_Chat_Icon2, true);
-    SetObjectHidden(ui_Chat_Icon3, true);
-
-    if (ui_Chat_container != nullptr) {
-        lv_obj_add_flag(ui_Chat_container, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_scroll_dir(ui_Chat_container, LV_DIR_VER);
-        lv_obj_set_scrollbar_mode(ui_Chat_container, LV_SCROLLBAR_MODE_AUTO);
-        lv_obj_add_flag(ui_Chat_container, LV_OBJ_FLAG_GESTURE_BUBBLE);
-        lv_obj_set_layout(ui_Chat_container, LV_LAYOUT_FLEX);
-        lv_obj_set_flex_flow(ui_Chat_container, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(ui_Chat_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-        lv_obj_set_style_pad_bottom(ui_Chat_container, 28, LV_PART_MAIN);
+    if (music_playing_) {
+        if (ui_Play != nullptr) {
+            lv_obj_add_flag(ui_Play, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (music_pause_icon_ == nullptr) {
+            music_pause_icon_ = lv_label_create(ui_Play_btn);
+            lv_obj_center(music_pause_icon_);
+            lv_obj_set_x(music_pause_icon_, 1);
+            lv_label_set_text(music_pause_icon_, FONT_AWESOME_PAUSE);
+            lv_obj_set_style_text_font(music_pause_icon_, &BUILTIN_ICON_FONT, 0);
+            lv_obj_set_style_text_color(music_pause_icon_, lv_color_hex(0xFFFFFF), 0);
+            lv_obj_set_style_text_opa(music_pause_icon_, 255, 0);
+        } else {
+            lv_obj_clear_flag(music_pause_icon_, LV_OBJ_FLAG_HIDDEN);
+        }
+    } else {
+        if (ui_Play != nullptr) {
+            lv_obj_clear_flag(ui_Play, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (music_pause_icon_ != nullptr) {
+            lv_obj_add_flag(music_pause_icon_, LV_OBJ_FLAG_HIDDEN);
+        }
     }
-    if (ui_C1 != nullptr && ui_Chat_Panel1 != nullptr) {
-        lv_obj_set_height(ui_C1, LV_SIZE_CONTENT);
-        lv_obj_set_width(ui_Chat_Panel1, 204);
-        lv_obj_set_height(ui_Chat_Panel1, LV_SIZE_CONTENT);
-        lv_obj_set_align(ui_Chat_Panel1, LV_ALIGN_TOP_MID);
-    }
-    if (ui_C2 != nullptr && ui_Chat_Panel2 != nullptr) {
-        lv_obj_set_height(ui_C2, LV_SIZE_CONTENT);
-        lv_obj_set_width(ui_Chat_Panel2, 152);
-        lv_obj_set_height(ui_Chat_Panel2, 44);
-        lv_obj_set_align(ui_Chat_Panel2, LV_ALIGN_TOP_MID);
-        lv_obj_set_style_radius(ui_Chat_Panel2, 22, LV_PART_MAIN);
-    }
-    BindChatButton();
 }
 
 void SmartGadgetDisplay::ApplyWeatherText() {
@@ -188,7 +171,7 @@ void SmartGadgetDisplay::ApplyWeatherText() {
     char pressure_text[24];
     char humidity_text[24];
     if (has_sensor_data) {
-        snprintf(temp_text, sizeof(temp_text), "%.0f°", sensor_data.temperature);
+        snprintf(temp_text, sizeof(temp_text), "%.0fC", sensor_data.temperature);
         snprintf(iaq_text, sizeof(iaq_text), "IAQ %.0f", sensor_data.iaq);
         snprintf(pressure_text, sizeof(pressure_text), "%.0fhPa", sensor_data.pressure / 100.0f);
         snprintf(humidity_text, sizeof(humidity_text), "%.0f%%", sensor_data.humidity);
@@ -237,6 +220,55 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
         char time_text[16];
         strftime(time_text, sizeof(time_text), "%H:%M", &timeinfo);
         lv_label_set_text(ui_Clock_Number, time_text);
+    }
+
+    if (ui_Clock_Date != nullptr) {
+        char date_text[32];
+        snprintf(date_text, sizeof(date_text), "%02d月%02d日 %s",
+                 timeinfo.tm_mon + 1, timeinfo.tm_mday, GetWeekdayText(timeinfo.tm_wday));
+        ApplyTodayFont(ui_Clock_Date);
+        lv_label_set_text(ui_Clock_Date, date_text);
+    }
+
+    if (ui_Clock_Status != nullptr || ui_Clock_Env_Left != nullptr || ui_Clock_Env_Right != nullptr) {
+        EnsureSensorServiceStarted();
+        SensorData sensor_data = {};
+        const bool has_sensor_data = SensorService::getInstance().getLatestData(sensor_data);
+
+        char status_text[32];
+        char temp_text[24];
+        char humidity_text[24];
+
+        if (!has_sensor_data) {
+            snprintf(status_text, sizeof(status_text), "等待传感器");
+            snprintf(temp_text, sizeof(temp_text), "温 -- C");
+            snprintf(humidity_text, sizeof(humidity_text), "湿 --%%");
+        } else {
+            if (sensor_data.temperature >= 30.0f) {
+                snprintf(status_text, sizeof(status_text), "环境偏热");
+            } else if (sensor_data.humidity >= 70.0f || sensor_data.iaq > 150.0f) {
+                snprintf(status_text, sizeof(status_text), "建议通风");
+            } else if (sensor_data.temperature >= 22.0f && sensor_data.temperature <= 28.0f &&
+                       sensor_data.humidity >= 40.0f && sensor_data.humidity <= 65.0f &&
+                       sensor_data.iaq <= 100.0f) {
+                snprintf(status_text, sizeof(status_text), "适合专注");
+            } else {
+                snprintf(status_text, sizeof(status_text), "状态稳定");
+            }
+            snprintf(temp_text, sizeof(temp_text), "温 %.0f C", sensor_data.temperature);
+            snprintf(humidity_text, sizeof(humidity_text), "湿 %.0f%%", sensor_data.humidity);
+        }
+
+        if (ui_Clock_Status != nullptr) {
+            ApplyTodayFont(ui_Clock_Status);
+            lv_label_set_text(ui_Clock_Status, status_text);
+        }
+        if (ui_Clock_Env_Left != nullptr) {
+            lv_label_set_text(ui_Clock_Env_Left, temp_text);
+        }
+        if (ui_Clock_Env_Right != nullptr) {
+            lv_label_set_text(ui_Clock_Env_Right, humidity_text);
+        }
     }
 
     if (ui_Hour != nullptr) {
@@ -354,6 +386,180 @@ void SmartGadgetDisplay::ApplyDeviceText() {
     }
 }
 
+void SmartGadgetDisplay::UpdateFocusCountdown(int64_t now_us) {
+    if (!focus_running_) {
+        return;
+    }
+
+    const int64_t remaining_us = focus_deadline_us_ - now_us;
+    if (remaining_us <= 0) {
+        focus_running_ = false;
+        focus_deadline_us_ = 0;
+        focus_remaining_seconds_ = 0;
+        return;
+    }
+
+    focus_remaining_seconds_ = static_cast<int32_t>((remaining_us + 999999) / 1000000);
+}
+
+void SmartGadgetDisplay::ApplyTodayText(const struct tm& timeinfo) {
+    if (ui_Today == nullptr) {
+        return;
+    }
+
+    EnsureSensorServiceStarted();
+    SensorData sensor_data = {};
+    const bool has_sensor_data = SensorService::getInstance().getLatestData(sensor_data);
+    UpdateFocusCountdown(esp_timer_get_time());
+
+    char date_text[48];
+    char status_text[64];
+    char status_detail[96];
+    char temp_text[64];
+    char humidity_text[64];
+    char air_text[64];
+    char exam_text[96];
+    char project_text[96];
+    char focus_time_text[16];
+    char focus_hint_text[96];
+    char focus_button_text[24];
+    const int exam_days = DaysUntilTarget(timeinfo, kCountdownTargets[0]);
+    const int project_days = DaysUntilTarget(timeinfo, kCountdownTargets[1]);
+    const CountdownTarget* primary_target = &kCountdownTargets[0];
+    int primary_days = exam_days;
+
+    snprintf(date_text, sizeof(date_text), "%02d月%02d日 %s",
+             timeinfo.tm_mon + 1, timeinfo.tm_mday, GetWeekdayText(timeinfo.tm_wday));
+
+    if ((primary_days < 0 && project_days >= 0) ||
+        (project_days >= 0 && (primary_days < 0 || project_days < primary_days))) {
+        primary_target = &kCountdownTargets[1];
+        primary_days = project_days;
+    }
+
+    if (!has_sensor_data) {
+        snprintf(status_text, sizeof(status_text), "等待传感器更新");
+        snprintf(status_detail, sizeof(status_detail), "先确定一件最重要的事");
+        snprintf(temp_text, sizeof(temp_text), "温度：-- C");
+        snprintf(humidity_text, sizeof(humidity_text), "湿度：-- %%");
+        snprintf(air_text, sizeof(air_text), "空气：等待更新");
+        snprintf(project_text, sizeof(project_text), "今天建议：只推进一步");
+    } else {
+        if (sensor_data.temperature >= 30.0f) {
+            snprintf(status_text, sizeof(status_text), "环境偏热");
+            snprintf(status_detail, sizeof(status_detail), "先补水，再开始专注");
+            snprintf(project_text, sizeof(project_text), "今天建议：降温后开一轮");
+        } else if (sensor_data.humidity >= 70.0f || sensor_data.iaq > 150.0f) {
+            snprintf(status_text, sizeof(status_text), "建议通风");
+            snprintf(status_detail, sizeof(status_detail), "空气有点闷，先改善环境");
+            snprintf(project_text, sizeof(project_text), "今天建议：通风后开一轮");
+        } else if (sensor_data.temperature >= 22.0f && sensor_data.temperature <= 28.0f &&
+                   sensor_data.humidity >= 40.0f && sensor_data.humidity <= 65.0f &&
+                   sensor_data.iaq <= 100.0f) {
+            snprintf(status_text, sizeof(status_text), "适合专注");
+            if (focus_running_) {
+                snprintf(status_detail, sizeof(status_detail), "保持当前节奏，别切任务");
+                snprintf(project_text, sizeof(project_text), "今天建议：完成当前这一轮");
+            } else {
+                snprintf(status_detail, sizeof(status_detail), "环境不错，适合推进任务");
+                snprintf(project_text, sizeof(project_text), "今天建议：开始 25 分钟");
+            }
+        } else {
+            snprintf(status_text, sizeof(status_text), "可以开始");
+            snprintf(status_detail, sizeof(status_detail), "先做一件事，边做边调整");
+            snprintf(project_text, sizeof(project_text), "今天建议：先开始，再调整");
+        }
+
+        if (sensor_data.iaq <= 100.0f) {
+            snprintf(air_text, sizeof(air_text), "空气：良好");
+        } else if (sensor_data.iaq <= 150.0f) {
+            snprintf(air_text, sizeof(air_text), "空气：一般");
+        } else {
+            snprintf(air_text, sizeof(air_text), "空气：需要通风");
+        }
+        snprintf(temp_text, sizeof(temp_text), "温度：%.0f C", sensor_data.temperature);
+        snprintf(humidity_text, sizeof(humidity_text), "湿度：%.0f%%", sensor_data.humidity);
+    }
+
+    if (primary_days < 0) {
+        snprintf(exam_text, sizeof(exam_text), "最近目标：完成一轮专注");
+    } else if (primary_days == 0) {
+        snprintf(exam_text, sizeof(exam_text), "最近目标：%s今天", primary_target->label);
+    } else {
+        snprintf(exam_text, sizeof(exam_text), "最近目标：%s D-%d", primary_target->label, primary_days);
+    }
+
+    snprintf(focus_time_text, sizeof(focus_time_text), "%02d:%02d",
+             static_cast<int>(focus_remaining_seconds_ / 60),
+             static_cast<int>(focus_remaining_seconds_ % 60));
+
+    if (focus_running_) {
+        snprintf(focus_hint_text, sizeof(focus_hint_text), "专注中，别切换任务");
+        snprintf(focus_button_text, sizeof(focus_button_text), "暂停");
+    } else if (focus_remaining_seconds_ == 0) {
+        snprintf(focus_hint_text, sizeof(focus_hint_text), "这一轮完成了，休息一下");
+        snprintf(focus_button_text, sizeof(focus_button_text), "开始");
+    } else if (focus_remaining_seconds_ < kFocusDurationSeconds) {
+        snprintf(focus_hint_text, sizeof(focus_hint_text), "已暂停，可以继续这一轮");
+        snprintf(focus_button_text, sizeof(focus_button_text), "继续");
+    } else {
+        snprintf(focus_hint_text, sizeof(focus_hint_text), "25 分钟，只做当前这一件事");
+        snprintf(focus_button_text, sizeof(focus_button_text), "开始");
+    }
+
+    if (ui_Today_title != nullptr) {
+        ApplyTodayFont(ui_Today_title);
+        lv_label_set_text(ui_Today_title, "今日专注");
+    }
+    if (ui_Today_date != nullptr) {
+        ApplyTodayFont(ui_Today_date);
+        lv_label_set_text(ui_Today_date, date_text);
+    }
+    if (ui_Today_status != nullptr) {
+        ApplyTodayFont(ui_Today_status);
+        lv_label_set_text(ui_Today_status, status_text);
+    }
+    if (ui_Today_status_detail != nullptr) {
+        ApplyTodayFont(ui_Today_status_detail);
+        lv_label_set_text(ui_Today_status_detail, status_detail);
+    }
+    if (ui_Today_env_temp != nullptr) {
+        ApplyTodayFont(ui_Today_env_temp);
+        lv_label_set_text(ui_Today_env_temp, temp_text);
+    }
+    if (ui_Today_env_humidity != nullptr) {
+        ApplyTodayFont(ui_Today_env_humidity);
+        lv_label_set_text(ui_Today_env_humidity, humidity_text);
+    }
+    if (ui_Today_env_air != nullptr) {
+        ApplyTodayFont(ui_Today_env_air);
+        lv_label_set_text(ui_Today_env_air, air_text);
+    }
+    if (ui_Today_exam != nullptr) {
+        ApplyTodayFont(ui_Today_exam);
+        lv_label_set_text(ui_Today_exam, exam_text);
+    }
+    if (ui_Today_project != nullptr) {
+        ApplyTodayFont(ui_Today_project);
+        lv_label_set_text(ui_Today_project, project_text);
+    }
+    if (ui_Today_focus_time != nullptr) {
+        lv_label_set_text(ui_Today_focus_time, focus_time_text);
+    }
+    if (ui_Today_focus_hint != nullptr) {
+        ApplyTodayFont(ui_Today_focus_hint);
+        lv_label_set_text(ui_Today_focus_hint, focus_hint_text);
+    }
+    if (ui_Today_focus_btn_label != nullptr) {
+        ApplyTodayFont(ui_Today_focus_btn_label);
+        lv_label_set_text(ui_Today_focus_btn_label, focus_button_text);
+    }
+    if (ui_Today_focus_reset_label != nullptr) {
+        ApplyTodayFont(ui_Today_focus_reset_label);
+        lv_label_set_text(ui_Today_focus_reset_label, "重置");
+    }
+}
+
 void SmartGadgetDisplay::UpdateStatusBar(bool update_all) {
     (void)update_all;
     if (!ui_ready_) {
@@ -370,7 +576,9 @@ void SmartGadgetDisplay::UpdateStatusBar(bool update_all) {
     DisplayLockGuard lock(this);
     ApplyClockText(timeinfo);
 
-    if (lv_screen_active() == ui_Weather) {
+    if (lv_screen_active() == ui_Today) {
+        ApplyTodayText(timeinfo);
+    } else if (lv_screen_active() == ui_Weather) {
         ApplyWeatherText();
     } else if (lv_screen_active() == ui_Device) {
         ApplyDeviceText();
@@ -389,6 +597,13 @@ void SmartGadgetDisplay::RefreshLiveData() {
         localtime_r(&now, &timeinfo);
         if (timeinfo.tm_year >= (2025 - 1900)) {
             ApplyClockText(timeinfo);
+        }
+    } else if (active_screen == ui_Today) {
+        time_t now = time(nullptr);
+        struct tm timeinfo = {};
+        localtime_r(&now, &timeinfo);
+        if (timeinfo.tm_year >= (2025 - 1900)) {
+            ApplyTodayText(timeinfo);
         }
     } else if (active_screen == ui_Weather) {
         ApplyWeatherText();
@@ -416,26 +631,36 @@ static void smart_gadget_answer_event_cb(lv_event_t* e) {
     }
 }
 
-static void smart_gadget_chat_speak_event_cb(lv_event_t* e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    if (code == LV_EVENT_PRESSED) {
-        if (ui_Chat2 != nullptr) {
-            lv_label_set_text(ui_Chat2, "Listening...");
+static void smart_gadget_music_play_event_cb(lv_event_t* e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        Application::GetInstance().ToggleMusicPlayback();
+    }
+}
+
+static void smart_gadget_music_prev_event_cb(lv_event_t* e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        Application::GetInstance().PreviousMusicTrack();
+    }
+}
+
+static void smart_gadget_music_next_event_cb(lv_event_t* e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        Application::GetInstance().NextMusicTrack();
+    }
+}
+
+static void smart_gadget_today_focus_event_cb(lv_event_t* e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        if (g_smart_gadget_display != nullptr) {
+            g_smart_gadget_display->ToggleFocusTimer();
         }
-        auto& app = Application::GetInstance();
-        if (app.GetDeviceState() == kDeviceStateIdle) {
-            app.ToggleChatState();
-        }
-    } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
-        if (ui_Chat2 != nullptr) {
-            lv_label_set_text(ui_Chat2, "Hold to speak");
-        }
-        auto& app = Application::GetInstance();
-        auto state = app.GetDeviceState();
-        if (state == kDeviceStateListening) {
-            app.StopListening();
-        } else if (state == kDeviceStateConnecting) {
-            app.HangupChat();
+    }
+}
+
+static void smart_gadget_today_reset_event_cb(lv_event_t* e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        if (g_smart_gadget_display != nullptr) {
+            g_smart_gadget_display->ResetFocusTimer();
         }
     }
 }
@@ -456,17 +681,94 @@ void SmartGadgetDisplay::BindCallButtons() {
     call_buttons_bound_ = true;
 }
 
-void SmartGadgetDisplay::BindChatButton() {
-    if (chat_button_bound_ || ui_Chat_Panel2 == nullptr) {
+void SmartGadgetDisplay::BindMusicButtons() {
+    if (music_buttons_bound_ || ui_Play_btn == nullptr) {
         return;
     }
 
-    lv_obj_add_flag(ui_Chat_Panel2, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(ui_Chat_Panel2, smart_gadget_chat_speak_event_cb, LV_EVENT_PRESSED, nullptr);
-    lv_obj_add_event_cb(ui_Chat_Panel2, smart_gadget_chat_speak_event_cb, LV_EVENT_RELEASED, nullptr);
-    lv_obj_add_event_cb(ui_Chat_Panel2, smart_gadget_chat_speak_event_cb, LV_EVENT_PRESS_LOST, nullptr);
+    lv_obj_add_flag(ui_Play_btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_Play_btn, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(ui_Play_btn, smart_gadget_music_play_event_cb, LV_EVENT_CLICKED, nullptr);
 
-    chat_button_bound_ = true;
+    if (ui_Play != nullptr) {
+        lv_obj_add_flag(ui_Play, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(ui_Play, LV_OBJ_FLAG_GESTURE_BUBBLE);
+        lv_obj_add_event_cb(ui_Play, smart_gadget_music_play_event_cb, LV_EVENT_CLICKED, nullptr);
+    }
+
+    if (ui_Backward != nullptr) {
+        lv_obj_add_flag(ui_Backward, LV_OBJ_FLAG_GESTURE_BUBBLE);
+        lv_obj_add_event_cb(ui_Backward, smart_gadget_music_prev_event_cb, LV_EVENT_CLICKED, nullptr);
+    }
+
+    if (ui_Forward != nullptr) {
+        lv_obj_add_flag(ui_Forward, LV_OBJ_FLAG_GESTURE_BUBBLE);
+        lv_obj_add_event_cb(ui_Forward, smart_gadget_music_next_event_cb, LV_EVENT_CLICKED, nullptr);
+    }
+
+    music_buttons_bound_ = true;
+    ApplyMusicButtonState();
+}
+
+void SmartGadgetDisplay::BindTodayButtons() {
+    if (today_buttons_bound_ || ui_Today_focus_btn == nullptr || ui_Today_focus_reset == nullptr) {
+        return;
+    }
+
+    lv_obj_add_flag(ui_Today_focus_btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_Today_focus_btn, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(ui_Today_focus_btn, smart_gadget_today_focus_event_cb, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_add_flag(ui_Today_focus_reset, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_Today_focus_reset, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(ui_Today_focus_reset, smart_gadget_today_reset_event_cb, LV_EVENT_CLICKED, nullptr);
+
+    today_buttons_bound_ = true;
+}
+
+void SmartGadgetDisplay::ToggleFocusTimer() {
+    if (!setup_ui_called_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+    const int64_t now_us = esp_timer_get_time();
+    if (focus_running_) {
+        UpdateFocusCountdown(now_us);
+        focus_running_ = false;
+        focus_deadline_us_ = 0;
+    } else {
+        if (focus_remaining_seconds_ <= 0 || focus_remaining_seconds_ > kFocusDurationSeconds) {
+            focus_remaining_seconds_ = kFocusDurationSeconds;
+        }
+        focus_deadline_us_ = now_us + static_cast<int64_t>(focus_remaining_seconds_) * 1000000;
+        focus_running_ = true;
+    }
+
+    time_t now = time(nullptr);
+    struct tm timeinfo = {};
+    localtime_r(&now, &timeinfo);
+    if (timeinfo.tm_year >= (2025 - 1900)) {
+        ApplyTodayText(timeinfo);
+    }
+}
+
+void SmartGadgetDisplay::ResetFocusTimer() {
+    if (!setup_ui_called_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+    focus_running_ = false;
+    focus_deadline_us_ = 0;
+    focus_remaining_seconds_ = kFocusDurationSeconds;
+
+    time_t now = time(nullptr);
+    struct tm timeinfo = {};
+    localtime_r(&now, &timeinfo);
+    if (timeinfo.tm_year >= (2025 - 1900)) {
+        ApplyTodayText(timeinfo);
+    }
 }
 
 void SmartGadgetDisplay::OnSquareLineScreenCreated(lv_obj_t* screen) {
@@ -475,11 +777,22 @@ void SmartGadgetDisplay::OnSquareLineScreenCreated(lv_obj_t* screen) {
     } else if (screen == ui_Call) {
         ConfigureScreenLifecycle(screen, kPageCall);
         ApplyCallText();
-    } else if (screen == ui_Chat) {
-        ConfigureScreenLifecycle(screen, kPageChat);
-        ApplyChatText();
+    } else if (screen == ui_Today) {
+        ConfigureScreenLifecycle(screen, kPageToday);
+        BindTodayButtons();
+        time_t now = time(nullptr);
+        struct tm timeinfo = {};
+        localtime_r(&now, &timeinfo);
+        if (timeinfo.tm_year >= (2025 - 1900)) {
+            ApplyTodayText(timeinfo);
+        }
     } else if (screen == ui_Music_Player) {
         ConfigureScreenLifecycle(screen, kPageMusic);
+        music_pause_icon_ = nullptr;
+        music_title_label_ = ui_Music_Title;
+        music_artist_label_ = ui_Author;
+        BindMusicButtons();
+        ApplyMusicButtonState();
     } else if (screen == ui_Weather) {
         ConfigureScreenLifecycle(screen, kPageWeather);
         ApplyWeatherText();
@@ -523,6 +836,12 @@ void SmartGadgetDisplay::UpdateCallStatus(const char* status) {
     }
     ApplyWeatherText();
     ApplyDeviceText();
+    time_t now = time(nullptr);
+    struct tm timeinfo = {};
+    localtime_r(&now, &timeinfo);
+    if (timeinfo.tm_year >= (2025 - 1900)) {
+        ApplyTodayText(timeinfo);
+    }
 }
 
 void SmartGadgetDisplay::EnsureSensorServiceStarted() {
@@ -550,7 +869,7 @@ void SmartGadgetDisplay::ConfigureScreenLifecycle(lv_obj_t* screen, PageIndex pa
 
 void SmartGadgetDisplay::HandleScreenLoaded(PageIndex page) {
     current_page_ = page;
-    if (page == kPageWeather || page == kPageDevice) {
+    if (page == kPageWeather || page == kPageDevice || page == kPageToday) {
         EnsureSensorServiceStarted();
     }
 }
@@ -574,7 +893,7 @@ void SmartGadgetDisplay::SetStatus(const char* status) {
     const char* text = status != nullptr ? status : "";
     UpdateCallStatus(text);
 
-    if (ui_ready_ && (strcmp(text, Lang::Strings::STANDBY) == 0)) {
+    if (ui_ready_ && current_page_.load() == kPageSplash && (strcmp(text, Lang::Strings::STANDBY) == 0)) {
         LoadPage(kPageClock);
     }
 }
@@ -602,14 +921,12 @@ void SmartGadgetDisplay::SetChatMessage(const char* role, const char* content) {
 
     if (strcmp(safe_role, "user") == 0) {
         user_message_ = safe_content;
-        ApplyChatText();
         ApplyDeviceText();
         return;
     }
 
     if (strcmp(safe_role, "assistant") == 0) {
         assistant_message_ = safe_content;
-        ApplyChatText();
         ApplyDeviceText();
         return;
     }
@@ -621,16 +938,36 @@ void SmartGadgetDisplay::SetChatMessage(const char* role, const char* content) {
 
 void SmartGadgetDisplay::ClearChatMessages() {
     DisplayLockGuard lock(this);
-    user_message_visible_ = false;
-    assistant_message_visible_ = true;
     user_message_.clear();
     assistant_message_.clear();
-    ApplyChatText();
     ApplyDeviceText();
 }
 
+void SmartGadgetDisplay::SetMusicPlaying(bool playing) {
+    music_playing_ = playing;
+    if (!setup_ui_called_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+    ApplyMusicButtonState();
+}
+
+void SmartGadgetDisplay::SetMusicTrackInfo(const char* title, const char* artist) {
+    if (!setup_ui_called_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+    if (ui_Music_Title != nullptr) {
+        lv_label_set_text(ui_Music_Title, title != nullptr ? title : "");
+    }
+    if (ui_Author != nullptr) {
+        lv_label_set_text(ui_Author, artist != nullptr ? artist : "");
+    }
+}
+
 void SmartGadgetDisplay::SetEmotion(const char* emotion) {
-    // Smart_Gadget UI keeps its own visual language; emotion updates are not shown on Call/Chat pages.
     (void)emotion;
 }
 
@@ -644,14 +981,6 @@ void SmartGadgetDisplay::ShowCallPage() {
     }
     DisplayLockGuard lock(this);
     LoadPage(kPageCall);
-}
-
-void SmartGadgetDisplay::ShowChatPage() {
-    if (!setup_ui_called_) {
-        return;
-    }
-    DisplayLockGuard lock(this);
-    LoadPage(kPageChat);
 }
 
 void SmartGadgetDisplay::LoadPage(PageIndex page) {
@@ -677,17 +1006,28 @@ void SmartGadgetDisplay::LoadPage(PageIndex page) {
             ApplyCallText();
             lv_screen_load_anim(ui_Call, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, false);
             break;
-        case kPageChat:
-            if (ui_Chat == nullptr) {
-                ui_Chat_screen_init();
+        case kPageToday:
+            if (ui_Today == nullptr) {
+                ui_Today_screen_init();
             }
-            ApplyChatText();
-            lv_screen_load_anim(ui_Chat, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, false);
+            {
+                time_t now = time(nullptr);
+                struct tm timeinfo = {};
+                localtime_r(&now, &timeinfo);
+                if (timeinfo.tm_year >= (2025 - 1900)) {
+                    ApplyTodayText(timeinfo);
+                }
+            }
+            BindTodayButtons();
+            lv_screen_load_anim(ui_Today, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, false);
             break;
         case kPageMusic:
             if (ui_Music_Player == nullptr) {
                 ui_Music_Player_screen_init();
+                music_pause_icon_ = nullptr;
             }
+            BindMusicButtons();
+            ApplyMusicButtonState();
             lv_screen_load_anim(ui_Music_Player, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, false);
             break;
         case kPageWeather:

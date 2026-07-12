@@ -23,11 +23,11 @@ extern "C" {
 #include "screens/ui_Splash.h"
 #include "screens/ui_Clock.h"
 #include "screens/ui_Call.h"
-#include "screens/ui_Chat.h"
 #include "screens/ui_Music_Player.h"
 #include "screens/ui_Weather.h"
 #include "screens/ui_Alarm.h"
 #include "screens/ui_Device.h"
+#include "screens/ui_Today.h"
 
 ///////////////////// VARIABLES ////////////////////
 
@@ -50,8 +50,6 @@ LV_IMG_DECLARE(ui_img_clock_hour_png);    // assets/clock_hour.png
 LV_IMG_DECLARE(ui_img_clock_sec_png);    // assets/clock_sec.png
 LV_IMG_DECLARE(ui_img_phone_png);    // assets/phone.png
 LV_IMG_DECLARE(ui_img_avatar_png);    // assets/avatar.png
-LV_IMG_DECLARE(ui_img_chatbox_png);    // assets/chatbox.png
-LV_IMG_DECLARE(ui_img_chatbox2_png);    // assets/chatbox2.png
 LV_IMG_DECLARE(ui_img_play_png);    // assets/play.png
 LV_IMG_DECLARE(ui_img_album_png);    // assets/album.png
 LV_IMG_DECLARE(ui_img_backward_png);    // assets/backward.png

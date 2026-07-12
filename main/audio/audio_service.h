@@ -5,6 +5,7 @@
 #include <deque>
 #include <condition_variable>
 #include <chrono>
+#include <functional>
 #include <mutex>
 
 #include <freertos/FreeRTOS.h>
@@ -127,9 +128,12 @@ public:
 
     void SetCallbacks(AudioServiceCallbacks& callbacks);
 
-    bool PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait = false);
+    bool PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait = false,
+                                 const std::function<bool()>& cancel_wait = {});
     std::unique_ptr<AudioStreamPacket> PopPacketFromSendQueue();
     void PlaySound(const std::string_view& sound);
+    void PlaySoundBlocking(const std::string_view& sound);
+    void PlaySoundBlocking(const std::string_view& sound, const std::function<bool()>& cancel_playback);
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
     void ResetDecoder();
     void SetModelsList(srmodel_list_t* models_list);
@@ -146,6 +150,7 @@ private:
     std::mutex decoder_mutex_;
     std::mutex input_resampler_mutex_;
     std::mutex sound_demuxer_mutex_;
+    std::mutex sound_playback_state_mutex_;
     esp_ae_rate_cvt_handle_t input_resampler_ = nullptr;
     esp_ae_rate_cvt_handle_t output_resampler_ = nullptr;
     
@@ -181,6 +186,8 @@ private:
     bool voice_detected_ = false;
     bool service_stopped_ = true;
     bool audio_input_need_warmup_ = false;
+    bool sound_wait_for_queue_ = false;
+    std::function<bool()> sound_cancel_playback_;
 
     esp_timer_handle_t audio_power_timer_ = nullptr;
     std::chrono::steady_clock::time_point last_input_time_;
@@ -191,6 +198,9 @@ private:
     void OpusCodecTask();
     void PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t>&& pcm);
     bool SetDecodeSampleRate(int sample_rate, int frame_duration);
+    void PlaySoundInternal(const std::string_view& ogg, bool wait_for_queue,
+                           const std::function<bool()>& cancel_playback);
+    bool ShouldCancelSoundPlayback();
     void CheckAndUpdateAudioPowerState();
 };
 

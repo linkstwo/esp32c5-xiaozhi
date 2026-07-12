@@ -33,6 +33,10 @@ extern lv_obj_t * ui_Hour;
 extern lv_obj_t * ui_Sec;
 extern lv_obj_t * ui_Clock_Center;
 extern lv_obj_t * ui_Clock_Number;
+extern lv_obj_t * ui_Clock_Date;
+extern lv_obj_t * ui_Clock_Status;
+extern lv_obj_t * ui_Clock_Env_Left;
+extern lv_obj_t * ui_Clock_Env_Right;
 extern lv_obj_t * ui_Scrolldots;
 // CUSTOM VARIABLES
 
@@ -41,4 +45,3 @@ extern lv_obj_t * ui_Scrolldots;
 #endif
 
 #endif
-

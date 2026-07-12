@@ -27,6 +27,12 @@ protected:
     void TryWifiConnect();
 
     /**
+     * Apply a frequently changed Wi-Fi credential pair into saved SSID list.
+     * Update the implementation when you need to switch router password quickly.
+     */
+    void ApplyQuickWifiCredentials();
+
+    /**
      * Enter WiFi configuration mode
      */
     void StartWifiConfigMode();

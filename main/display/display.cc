@@ -49,6 +49,14 @@ void Display::ClearChatMessages() {
     // Default empty implementation, override in subclasses if needed
 }
 
+void Display::SetMusicTrackInfo(const char* title, const char* artist) {
+    ESP_LOGW(TAG, "SetMusicTrackInfo: %s / %s", title ? title : "", artist ? artist : "");
+}
+
+void Display::SetMusicPlaying(bool playing) {
+    ESP_LOGW(TAG, "SetMusicPlaying: %d", playing);
+}
+
 void Display::SetTheme(Theme* theme) {
     current_theme_ = theme;
     Settings settings("display", true);

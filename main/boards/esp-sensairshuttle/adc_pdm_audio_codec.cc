@@ -4,6 +4,7 @@
 #include <esp_timer.h>
 #include <driver/i2c.h>
 #include <driver/i2c_master.h>
+#include <esp_private/gpio.h>
 #include <driver/i2s_tdm.h>
 #include "driver/i2s_pdm.h"
 #include "esp_codec_adc.h"
@@ -11,10 +12,29 @@
 #include "soc/io_mux_reg.h"
 #include "hal/rtc_io_hal.h"
 #include "hal/gpio_ll.h"
-#include "settings.h"
 #include "config.h"
 
 static const char TAG[] = "AdcPdmAudioCodec";
+
+namespace {
+constexpr int kDefaultOutputVolume = 60;
+constexpr int kStartupSilenceMs = 40;
+constexpr int kShutdownSilenceMs = 40;
+
+void WriteSilence(esp_codec_dev_handle_t dev, int sample_rate, int duration_ms) {
+    if (dev == nullptr || sample_rate <= 0 || duration_ms <= 0) {
+        return;
+    }
+
+    int samples_left = sample_rate * duration_ms / 1000;
+    int16_t silence[160] = {};
+    while (samples_left > 0) {
+        int chunk = samples_left > 160 ? 160 : samples_left;
+        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_write(dev, silence, chunk * sizeof(int16_t)));
+        samples_left -= chunk;
+    }
+}
+} // namespace
 
 #define BSP_I2S_GPIO_CFG(_dout)       \
     {                          \
@@ -75,10 +95,10 @@ AdcPdmAudioCodec::AdcPdmAudioCodec(int input_sample_rate, int output_sample_rate
 
     i2s_pdm_tx_config_t pdm_cfg_default = BSP_I2S_DUPLEX_MONO_CFG((uint32_t)output_sample_rate, pdm_speak_p);
     pdm_cfg_default.clk_cfg.up_sample_fs = AUDIO_PDM_UPSAMPLE_FS;
-    pdm_cfg_default.slot_cfg.sd_scale = I2S_PDM_SIG_SCALING_MUL_4;
-    pdm_cfg_default.slot_cfg.hp_scale = I2S_PDM_SIG_SCALING_MUL_4;
-    pdm_cfg_default.slot_cfg.lp_scale = I2S_PDM_SIG_SCALING_MUL_4;
-    pdm_cfg_default.slot_cfg.sinc_scale = I2S_PDM_SIG_SCALING_MUL_4;
+    pdm_cfg_default.slot_cfg.sd_scale = I2S_PDM_SIG_SCALING_MUL_1;
+    pdm_cfg_default.slot_cfg.hp_scale = I2S_PDM_SIG_SCALING_DIV_2;
+    pdm_cfg_default.slot_cfg.lp_scale = I2S_PDM_SIG_SCALING_MUL_1;
+    pdm_cfg_default.slot_cfg.sinc_scale = I2S_PDM_SIG_SCALING_MUL_1;
     const i2s_pdm_tx_config_t *p_i2s_cfg = &pdm_cfg_default;
 
     ESP_ERROR_CHECK(i2s_channel_init_pdm_tx_mode(tx_handle_, p_i2s_cfg));
@@ -97,7 +117,7 @@ AdcPdmAudioCodec::AdcPdmAudioCodec(int input_sample_rate, int output_sample_rate
     codec_dev_cfg.data_if = i2s_data_if;
     output_dev_ = esp_codec_dev_new(&codec_dev_cfg);
 
-    output_volume_ = 100;
+    output_volume_ = kDefaultOutputVolume;
     if(pa_ctl != GPIO_NUM_NC) {
         pa_ctrl_pin_ = pa_ctl;
         gpio_config_t io_conf = {};
@@ -111,7 +131,7 @@ AdcPdmAudioCodec::AdcPdmAudioCodec(int input_sample_rate, int output_sample_rate
     gpio_set_drive_capability(pdm_speak_p, GPIO_DRIVE_CAP_0);
 
     if(pdm_speak_n != GPIO_NUM_NC){
-        PIN_FUNC_SELECT(IO_MUX_GPIO10_REG, PIN_FUNC_GPIO);
+        gpio_func_sel(pdm_speak_n, PIN_FUNC_GPIO);
         gpio_set_direction(pdm_speak_n, GPIO_MODE_OUTPUT);
         esp_rom_gpio_connect_out_signal(pdm_speak_n, I2SO_SD_OUT_IDX, 1, 0); //反转输出 SD OUT 信号
         gpio_set_drive_capability(pdm_speak_n, GPIO_DRIVE_CAP_0);
@@ -177,6 +197,9 @@ void AdcPdmAudioCodec::EnableOutput(bool enable) {
         return;
     }
     if (enable) {
+        if(pa_ctrl_pin_ != GPIO_NUM_NC){
+            gpio_set_level(pa_ctrl_pin_, 0);
+        }
         // Play 16bit 1 channel
         esp_codec_dev_sample_info_t fs = {
             .bits_per_sample = 16,
@@ -195,6 +218,7 @@ void AdcPdmAudioCodec::EnableOutput(bool enable) {
         clk_cfg.up_sample_fs = AUDIO_PDM_UPSAMPLE_FS;
         ESP_ERROR_CHECK(i2s_channel_reconfig_pdm_tx_clock(tx_handle_, &clk_cfg));
         ESP_ERROR_CHECK(i2s_channel_enable(tx_handle_));
+        WriteSilence(output_dev_, output_sample_rate_, kStartupSilenceMs);
         if(pa_ctrl_pin_ != GPIO_NUM_NC){
             gpio_set_level(pa_ctrl_pin_, 1);
         }
@@ -208,6 +232,8 @@ void AdcPdmAudioCodec::EnableOutput(bool enable) {
         if (output_timer_) {
             esp_timer_stop(output_timer_);
         }
+        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_set_out_vol(output_dev_, 0));
+        WriteSilence(output_dev_, output_sample_rate_, kShutdownSilenceMs);
         if(pa_ctrl_pin_ != GPIO_NUM_NC){
             gpio_set_level(pa_ctrl_pin_, 0);
         }
@@ -235,12 +261,7 @@ int AdcPdmAudioCodec::Write(const int16_t* data, int samples) {
 }
 
 void AdcPdmAudioCodec::Start() {
-    Settings settings("audio", false);
-    output_volume_ = settings.GetInt("output_volume", output_volume_);
-    if (output_volume_ <= 0) {
-        ESP_LOGW(TAG, "Output volume value (%d) is too small, setting to default (10)", output_volume_);
-        output_volume_ = 10;
-    }
+    output_volume_ = kDefaultOutputVolume;
 
     EnableInput(true);
     EnableOutput(true);

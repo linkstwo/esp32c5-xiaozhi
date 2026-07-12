@@ -251,9 +251,9 @@ void ui_destroy(void)
     ui_Splash_screen_destroy();
     ui_Clock_screen_destroy();
     ui_Call_screen_destroy();
-    ui_Chat_screen_destroy();
     ui_Music_Player_screen_destroy();
     ui_Weather_screen_destroy();
     ui_Alarm_screen_destroy();
     ui_Device_screen_destroy();
+    ui_Today_screen_destroy();
 }
