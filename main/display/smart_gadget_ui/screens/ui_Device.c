@@ -126,11 +126,11 @@ void ui_event_Device(lv_event_t * e)
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
         lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Clock, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Clock_screen_init);
+        _ui_screen_change(&ui_Alarm, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Alarm_screen_init);
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
         lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Call, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Call_screen_init);
+        _ui_screen_change(&ui_Clock, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Clock_screen_init);
     }
 }
 
@@ -246,7 +246,7 @@ void ui_Device_screen_init(void)
                                            &lv_font_montserrat_14);
     device_meter_create(ui_Device_system_panel, 0, 0, 160, 0xF6A44D);
 
-    ui_Device_page = device_label_create(ui_Device, "2 / 7", -18, -11, 46, 0x9C9CD9, &lv_font_montserrat_14);
+    ui_Device_page = device_label_create(ui_Device, "7 / 7", -18, -11, 46, 0x9C9CD9, &lv_font_montserrat_14);
     lv_obj_set_align(ui_Device_page, LV_ALIGN_BOTTOM_RIGHT);
 
     lv_obj_add_event_cb(ui_Device, ui_event_Device, LV_EVENT_ALL, NULL);

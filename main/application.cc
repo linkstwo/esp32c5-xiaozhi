@@ -1318,8 +1318,9 @@ void Application::UpdateMusicTrackInfo() {
     }
 
     const auto& track = kMusicTracks[track_index];
-    Schedule([title = std::string(track.title), artist = std::string(track.artist)]() {
+    Schedule([title = std::string(track.title), artist = std::string(track.artist), track_index]() {
         auto display = Board::GetInstance().GetDisplay();
+        display->SetMusicTrackIndex(static_cast<uint32_t>(track_index), kMusicTrackCount);
         display->SetMusicTrackInfo(title.c_str(), artist.c_str());
     });
 }

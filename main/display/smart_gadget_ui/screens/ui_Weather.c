@@ -29,7 +29,7 @@ void ui_event_Weather(lv_event_t * e)
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
         lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Music_Player, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Music_Player_screen_init);
+        _ui_screen_change(&ui_Call, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Call_screen_init);
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
         lv_indev_wait_release(lv_indev_active());
@@ -129,28 +129,7 @@ void ui_Weather_screen_init(void)
     lv_label_set_text(ui_W3_Num, "H -- %");
 
     ui_Scrolldots4 = ui_Scrolldots_create(ui_Weather);
-    lv_obj_set_x(ui_Scrolldots4, 0);
-    lv_obj_set_y(ui_Scrolldots4, -8);
-
-    lv_obj_set_width(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D1), 4);
-    lv_obj_set_height(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D1), 4);
-
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D2), 10);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D2), 0);
-
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D3), 20);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D3), 0);
-
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D4), 30);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D4), 0);
-
-    lv_obj_set_width(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D5), 8);
-    lv_obj_set_height(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D5), 8);
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D5), 41);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D5), 0);
-    lv_obj_set_style_bg_color(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D5), lv_color_hex(0x101C52),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_comp_get_child(ui_Scrolldots4, UI_COMP_SCROLLDOTS_D5), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_update_page_indicator(ui_Scrolldots4, 4, 7, 0x6E9B52, 0xD8CFB2);
 
     lv_obj_add_event_cb(ui_Weather, ui_event_Weather, LV_EVENT_ALL, NULL);
 

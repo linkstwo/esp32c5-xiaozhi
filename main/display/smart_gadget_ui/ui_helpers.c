@@ -361,4 +361,61 @@ void _ui_switch_theme(int val)
 #endif
 }
 
+void ui_update_page_indicator(lv_obj_t * indicator, uint32_t current_index, uint32_t total_pages,
+                              uint32_t active_color, uint32_t inactive_color)
+{
+    uint32_t i;
+
+    if(indicator == NULL) {
+        return;
+    }
+
+    if(total_pages == 0) {
+        total_pages = 1;
+    }
+    if(total_pages > UI_PAGE_INDICATOR_MAX_PAGES) {
+        total_pages = UI_PAGE_INDICATOR_MAX_PAGES;
+    }
+    if(current_index >= total_pages) {
+        current_index = total_pages - 1;
+    }
+
+    lv_obj_set_width(indicator, 60);
+    lv_obj_set_height(indicator, 8);
+    lv_obj_set_align(indicator, LV_ALIGN_BOTTOM_MID);
+    lv_obj_set_x(indicator, 0);
+    lv_obj_set_y(indicator, -8);
+    lv_obj_set_style_bg_opa(indicator, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(indicator, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    for(i = 0; i < UI_PAGE_INDICATOR_MAX_PAGES; ++i) {
+        lv_obj_t * dot = ui_comp_get_child(indicator, UI_COMP_SCROLLDOTS_D1 + (int)i);
+        const bool is_visible = i < total_pages;
+        const bool is_active = i == current_index;
+        const int size = is_active ? 7 : 5;
+
+        if(dot == NULL) {
+            continue;
+        }
+
+        if(is_visible) {
+            lv_obj_clear_flag(dot, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(dot, LV_OBJ_FLAG_HIDDEN);
+            continue;
+        }
+
+        lv_obj_set_width(dot, size);
+        lv_obj_set_height(dot, size);
+        lv_obj_set_x(dot, (int)(i * 9));
+        lv_obj_set_y(dot, is_active ? 0 : 1);
+        lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(dot,
+                                  lv_color_hex(is_active ? active_color : inactive_color),
+                                  LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(dot, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+}
+
 

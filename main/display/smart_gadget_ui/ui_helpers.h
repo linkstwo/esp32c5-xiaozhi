@@ -141,6 +141,10 @@ void _ui_spinbox_step(lv_obj_t * target, int val)
 void _ui_switch_theme(int val)
 ;
 
+#define UI_PAGE_INDICATOR_MAX_PAGES 7
+void ui_update_page_indicator(lv_obj_t * indicator, uint32_t current_index, uint32_t total_pages,
+                              uint32_t active_color, uint32_t inactive_color);
+
 
 
 #ifdef __cplusplus

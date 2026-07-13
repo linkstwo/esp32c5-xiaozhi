@@ -1,15 +1,19 @@
 // This file follows the SquareLine Studio screen style used by Smart_Gadget.
 
 #include "../ui.h"
+#include "focus_ui_tokens.h"
 
-LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
+#include <font_awesome.h>
+
 LV_FONT_DECLARE(font_puhui_16_4);
+LV_FONT_DECLARE(BUILTIN_ICON_FONT);
 
 lv_obj_t * ui_Today = NULL;
 lv_obj_t * ui_Today_header = NULL;
 lv_obj_t * ui_Today_title = NULL;
 lv_obj_t * ui_Today_date = NULL;
 lv_obj_t * ui_Today_scroll = NULL;
+lv_obj_t * ui_Today_timer_arc = NULL;
 lv_obj_t * ui_Today_status_panel = NULL;
 lv_obj_t * ui_Today_status = NULL;
 lv_obj_t * ui_Today_status_detail = NULL;
@@ -22,113 +26,154 @@ lv_obj_t * ui_Today_exam = NULL;
 lv_obj_t * ui_Today_project = NULL;
 lv_obj_t * ui_Today_focus_panel = NULL;
 lv_obj_t * ui_Today_focus_time = NULL;
+lv_obj_t * ui_Today_focus_unit = NULL;
 lv_obj_t * ui_Today_focus_hint = NULL;
+lv_obj_t * ui_Today_duration_left = NULL;
+lv_obj_t * ui_Today_left_btn_icon = NULL;
+lv_obj_t * ui_Today_left_btn_label = NULL;
+lv_obj_t * ui_Today_duration_right = NULL;
+lv_obj_t * ui_Today_task_panel = NULL;
+lv_obj_t * ui_Today_task_label = NULL;
 lv_obj_t * ui_Today_focus_btn = NULL;
+lv_obj_t * ui_Today_focus_btn_icon = NULL;
 lv_obj_t * ui_Today_focus_btn_label = NULL;
 lv_obj_t * ui_Today_focus_reset = NULL;
+lv_obj_t * ui_Today_focus_reset_icon = NULL;
 lv_obj_t * ui_Today_focus_reset_label = NULL;
+lv_obj_t * ui_Today_tip_panel = NULL;
+lv_obj_t * ui_Today_tip_icon = NULL;
+lv_obj_t * ui_Today_tip_label = NULL;
+lv_obj_t * ui_Today_mascot_front = NULL;
+lv_obj_t * ui_Today_mascot_back = NULL;
+lv_obj_t * ui_Today_left_decor = NULL;
+lv_obj_t * ui_Today_corner_vine = NULL;
+lv_obj_t * ui_Today_top_back = NULL;
+lv_obj_t * ui_Today_top_gear = NULL;
+lv_obj_t * ui_Today_scrolldots = NULL;
+lv_obj_t * ui_Today_state_panel = NULL;
+lv_obj_t * ui_Today_state_label = NULL;
+lv_obj_t * ui_Today_primary_icon = NULL;
+lv_obj_t * ui_Today_secondary_icon = NULL;
+lv_obj_t * ui_Today_task_edit_icon = NULL;
+lv_obj_t * ui_Today_center_icon = NULL;
+
+static void today_clear_obj_style(lv_obj_t * obj)
+{
+    lv_obj_remove_style_all(obj);
+    lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_GESTURE_BUBBLE);
+}
+
+static lv_obj_t * today_circle_create(lv_obj_t * parent, int x, int y, int size, uint32_t color, lv_opa_t opa)
+{
+    lv_obj_t * obj = lv_obj_create(parent);
+    today_clear_obj_style(obj);
+    lv_obj_set_pos(obj, x, y);
+    lv_obj_set_size(obj, size, size);
+    lv_obj_set_style_radius(obj, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(obj, opa, 0);
+    return obj;
+}
 
 static lv_obj_t * today_label_create(lv_obj_t * parent, const char * text, int x, int y, int width,
-                                     uint32_t color, const lv_font_t * font)
+                                     uint32_t color, const lv_font_t * font, lv_text_align_t align)
 {
     lv_obj_t * label = lv_label_create(parent);
-    lv_obj_set_width(label, width);
-    lv_obj_set_height(label, LV_SIZE_CONTENT);
-    lv_obj_set_x(label, x);
-    lv_obj_set_y(label, y);
+    lv_obj_set_pos(label, x, y);
+    lv_obj_set_size(label, width, LV_SIZE_CONTENT);
     lv_label_set_text(label, text);
-    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_color(label, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label, font, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_line_space(label, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+    lv_obj_set_style_text_font(label, font, 0);
+    lv_obj_set_style_text_align(label, align, 0);
     lv_obj_add_flag(label, LV_OBJ_FLAG_GESTURE_BUBBLE);
     return label;
 }
 
-static lv_obj_t * today_block_create(lv_obj_t * parent, int width, uint32_t bg_color, lv_opa_t bg_opa)
+static lv_obj_t * today_button_create(lv_obj_t * parent, int x, int y, int width, int height, int radius,
+                                      uint32_t bg_color, uint32_t border_color)
 {
-    lv_obj_t * block = lv_obj_create(parent);
-    lv_obj_set_width(block, width);
-    lv_obj_set_height(block, LV_SIZE_CONTENT);
-    lv_obj_remove_flag(block, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(block, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_set_layout(block, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(block, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(block, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_radius(block, 18, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(block, lv_color_hex(bg_color), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(block, bg_opa, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(block, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(block, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(block, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(block, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(block, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_row(block, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
-    return block;
+    lv_obj_t * btn;
+
+    btn = lv_obj_create(parent);
+    today_clear_obj_style(btn);
+    lv_obj_set_pos(btn, x, y);
+    lv_obj_set_size(btn, width, height);
+    lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_radius(btn, radius, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(bg_color), 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(border_color), 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_pad_left(btn, 10, 0);
+    lv_obj_set_style_pad_right(btn, 10, 0);
+    lv_obj_set_style_pad_top(btn, 0, 0);
+    lv_obj_set_style_pad_bottom(btn, 0, 0);
+    lv_obj_set_style_pad_column(btn, 7, 0);
+    lv_obj_set_layout(btn, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_transform_zoom(btn, 256, 0);
+    lv_obj_set_style_transform_zoom(btn, 238, LV_STATE_PRESSED);
+    return btn;
 }
 
-static lv_obj_t * today_panel_create(lv_obj_t * parent, const char * title, uint32_t accent_color)
+static lv_obj_t * today_button_icon_label_create(lv_obj_t * parent, int y, int width)
 {
-    lv_obj_t * panel = today_block_create(parent, 216, 0xFFFFFF, 242);
-    lv_obj_set_style_radius(panel, 16, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(panel, lv_color_hex(0xDCE8D7), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_opa(panel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_t * accent = lv_obj_create(panel);
-    lv_obj_set_width(accent, 34);
-    lv_obj_set_height(accent, 3);
-    lv_obj_remove_flag(accent, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(accent, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_set_style_radius(accent, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(accent, lv_color_hex(accent_color), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(accent, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(accent, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    today_label_create(panel, title, 0, 0, 192, 0x253530, &font_puhui_16_4);
-    return panel;
-}
-
-static lv_obj_t * today_value_create(lv_obj_t * parent, const char * text, uint32_t bg_color, uint32_t text_color)
-{
-    lv_obj_t * row = lv_obj_create(parent);
-    lv_obj_set_width(row, 192);
-    lv_obj_set_height(row, LV_SIZE_CONTENT);
-    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(row, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_set_style_radius(row, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(row, lv_color_hex(bg_color), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(row, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(row, 10, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(row, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(row, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_t * label = lv_label_create(row);
-    lv_obj_set_width(label, 172);
-    lv_obj_set_height(label, LV_SIZE_CONTENT);
-    lv_label_set_text(label, text);
-    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_color(label, lv_color_hex(text_color), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(label, &font_puhui_16_4, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_line_space(label, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_t * label;
+    (void)y;
+    (void)width;
+    label = lv_label_create(parent);
+    lv_label_set_text(label, "");
+    lv_obj_set_style_text_color(label, lv_color_hex(FOCUS_COLOR_TEXT_GREEN), 0);
+    lv_obj_set_style_text_font(label, &BUILTIN_ICON_FONT, 0);
     lv_obj_add_flag(label, LV_OBJ_FLAG_GESTURE_BUBBLE);
     return label;
+}
+
+static lv_obj_t * today_button_text_label_create(lv_obj_t * parent, int y, int width)
+{
+    lv_obj_t * label;
+    (void)y;
+    (void)width;
+    label = lv_label_create(parent);
+    lv_label_set_text(label, "");
+    lv_obj_set_style_text_color(label, lv_color_hex(FOCUS_COLOR_TEXT_GREEN), 0);
+    lv_obj_set_style_text_font(label, &font_puhui_16_4, 0);
+    lv_obj_add_flag(label, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    return label;
+}
+
+static void today_highlight_page_dot(lv_obj_t * dots, uint32_t index)
+{
+    ui_update_page_indicator(dots, index, 7, FOCUS_COLOR_DECOR_GREEN, 0xD8CFB2);
 }
 
 void ui_event_Today(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
 
-    if(event_code == LV_EVENT_SCREEN_LOADED) {
-        upanim_Animation(ui_Today_scroll, 100);
+    if(event_code == LV_EVENT_SCREEN_LOAD_START) {
+        if(ui_Today_timer_arc != NULL) {
+            upanim_Animation(ui_Today_timer_arc, 50);
+        }
+        if(ui_Today_mascot_front != NULL) {
+            upanim_Animation(ui_Today_mascot_front, 90);
+        }
+        if(ui_Today_duration_left != NULL) {
+            upanim_Animation(ui_Today_duration_left, 120);
+        }
+        if(ui_Today_focus_btn != NULL) {
+            upanim_Animation(ui_Today_focus_btn, 160);
+        }
+        if(ui_Today_focus_reset != NULL) {
+            upanim_Animation(ui_Today_focus_reset, 200);
+        }
     }
     if(event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
         lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Call, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Call_screen_init);
+        _ui_screen_change(&ui_Clock, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Clock_screen_init);
     }
     if(event_code == LV_EVENT_GESTURE && lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
         lv_indev_wait_release(lv_indev_active());
@@ -140,137 +185,91 @@ void ui_Today_screen_init(void)
 {
     ui_Today = lv_obj_create(NULL);
     lv_obj_remove_flag(ui_Today, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(ui_Today, lv_color_hex(0xEDF5EE), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_Today, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_Today, lv_color_hex(FOCUS_COLOR_READY_BG), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Today, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(ui_Today, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(ui_Today, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_Today_scroll = lv_obj_create(ui_Today);
-    lv_obj_set_width(ui_Today_scroll, 232);
-    lv_obj_set_height(ui_Today_scroll, 228);
-    lv_obj_set_x(ui_Today_scroll, 0);
-    lv_obj_set_y(ui_Today_scroll, 2);
-    lv_obj_set_align(ui_Today_scroll, LV_ALIGN_TOP_MID);
-    lv_obj_add_flag(ui_Today_scroll, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(ui_Today_scroll, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_set_scroll_dir(ui_Today_scroll, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(ui_Today_scroll, LV_SCROLLBAR_MODE_AUTO);
-    lv_obj_set_layout(ui_Today_scroll, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(ui_Today_scroll, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(ui_Today_scroll, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_bg_color(ui_Today_scroll, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_Today_scroll, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui_Today_scroll, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_left(ui_Today_scroll, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(ui_Today_scroll, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(ui_Today_scroll, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(ui_Today_scroll, 28, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_row(ui_Today_scroll, 9, LV_PART_MAIN | LV_STATE_DEFAULT);
+    today_circle_create(ui_Today, -42, 18, 96, 0xF8E7B7, 160);
+    today_circle_create(ui_Today, 214, 78, 58, 0xE5F1D6, 150);
+    today_circle_create(ui_Today, 28, 22, 6, FOCUS_COLOR_DECOR_BLUE, LV_OPA_COVER);
+    today_circle_create(ui_Today, 16, 194, 5, FOCUS_COLOR_DECOR_YELLOW, LV_OPA_COVER);
+    today_circle_create(ui_Today, 249, 168, 5, FOCUS_COLOR_DECOR_GREEN, LV_OPA_COVER);
+    today_circle_create(ui_Today, 239, 29, 4, FOCUS_COLOR_DECOR_BLUE, LV_OPA_COVER);
 
-    ui_Today_focus_panel = today_block_create(ui_Today_scroll, 216, 0x143B33, 255);
-    ui_Today_header = ui_Today_focus_panel;
-    lv_obj_set_style_pad_left(ui_Today_focus_panel, 14, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_right(ui_Today_focus_panel, 14, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_top(ui_Today_focus_panel, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_bottom(ui_Today_focus_panel, 14, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_row(ui_Today_focus_panel, 7, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_Today_timer_arc = lv_arc_create(ui_Today);
+    lv_obj_set_pos(ui_Today_timer_arc, FOCUS_TIMER_X, FOCUS_TIMER_Y);
+    lv_obj_set_size(ui_Today_timer_arc, FOCUS_TIMER_SIZE, FOCUS_TIMER_SIZE);
+    lv_arc_set_rotation(ui_Today_timer_arc, 270);
+    lv_arc_set_bg_angles(ui_Today_timer_arc, 0, 360);
+    lv_arc_set_range(ui_Today_timer_arc, 0, 1000);
+    lv_arc_set_value(ui_Today_timer_arc, 1000);
+    lv_obj_remove_style(ui_Today_timer_arc, NULL, LV_PART_KNOB);
+    lv_obj_clear_flag(ui_Today_timer_arc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_Today_timer_arc, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_style_arc_width(ui_Today_timer_arc, FOCUS_ARC_MAIN_WIDTH, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_width(ui_Today_timer_arc, FOCUS_ARC_INDICATOR_WIDTH, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_TRACK), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_READY_ACCENT),
+                               LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_opa(ui_Today_timer_arc, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_opa(ui_Today_timer_arc, LV_OPA_COVER, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
-    ui_Today_title = today_label_create(ui_Today_focus_panel, "今日专注", 0, 0, 188, 0xFFFFFF,
-                                        &font_puhui_16_4);
-    ui_Today_date = today_label_create(ui_Today_focus_panel, "06月17日 周三", 0, 0, 188, 0xA9D6C6,
-                                       &font_puhui_16_4);
+    ui_Today_focus_panel = today_circle_create(ui_Today, FOCUS_TIMER_INNER_X, FOCUS_TIMER_INNER_Y,
+                                               FOCUS_TIMER_INNER_SIZE, FOCUS_COLOR_PANEL, LV_OPA_COVER);
+    lv_obj_set_style_border_color(ui_Today_focus_panel, lv_color_hex(FOCUS_COLOR_PANEL_BORDER),
+                                  LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(ui_Today_focus_panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_Today_focus_time = lv_label_create(ui_Today_focus_panel);
-    lv_obj_set_width(ui_Today_focus_time, 188);
-    lv_obj_set_height(ui_Today_focus_time, LV_SIZE_CONTENT);
-    lv_label_set_text(ui_Today_focus_time, "25:00");
-    lv_label_set_long_mode(ui_Today_focus_time, LV_LABEL_LONG_CLIP);
-    lv_obj_set_style_text_align(ui_Today_focus_time, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_color(ui_Today_focus_time, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_Today_focus_time, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_Today_focus_time, &ui_font_Number, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_flag(ui_Today_focus_time, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    ui_Today_focus_hint = today_label_create(ui_Today_focus_panel, "", 0, 20, FOCUS_TIMER_INNER_SIZE,
+                                             FOCUS_COLOR_TEXT_GREEN, &font_puhui_16_4, LV_TEXT_ALIGN_CENTER);
+    lv_obj_set_style_transform_zoom(ui_Today_focus_hint, 200, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_add_flag(ui_Today_focus_hint, LV_OBJ_FLAG_HIDDEN);
 
-    ui_Today_focus_hint = today_label_create(ui_Today_focus_panel, "25 分钟，只做当前这一件事", 0, 0, 188,
-                                             0xD8F2E9, &font_puhui_16_4);
-    lv_obj_set_style_text_align(ui_Today_focus_hint, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_Today_focus_time = today_label_create(ui_Today_focus_panel, "25:00", 0, 28, FOCUS_TIMER_INNER_SIZE,
+                                             FOCUS_COLOR_TEXT_MAIN, &ui_font_Number, LV_TEXT_ALIGN_CENTER);
+    lv_obj_set_style_transform_zoom(ui_Today_focus_time, 176, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_t * ui_Today_focus_actions = lv_obj_create(ui_Today_focus_panel);
-    lv_obj_set_width(ui_Today_focus_actions, 188);
-    lv_obj_set_height(ui_Today_focus_actions, LV_SIZE_CONTENT);
-    lv_obj_remove_flag(ui_Today_focus_actions, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(ui_Today_focus_actions, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_set_style_bg_opa(ui_Today_focus_actions, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui_Today_focus_actions, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_all(ui_Today_focus_actions, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_column(ui_Today_focus_actions, 8, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_layout(ui_Today_focus_actions, LV_LAYOUT_FLEX);
-    lv_obj_set_flex_flow(ui_Today_focus_actions, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(ui_Today_focus_actions, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    ui_Today_focus_unit = today_label_create(ui_Today_focus_panel, "分钟", 0, 90, FOCUS_TIMER_INNER_SIZE,
+                                             FOCUS_COLOR_TEXT_GREEN, &font_puhui_16_4, LV_TEXT_ALIGN_CENTER);
+    lv_obj_set_style_transform_zoom(ui_Today_focus_unit, 198, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_Today_focus_btn = lv_obj_create(ui_Today_focus_actions);
-    lv_obj_set_width(ui_Today_focus_btn, 112);
-    lv_obj_set_height(ui_Today_focus_btn, 36);
-    lv_obj_remove_flag(ui_Today_focus_btn, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(ui_Today_focus_btn, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_set_style_radius(ui_Today_focus_btn, 24, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_Today_focus_btn, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_Today_focus_btn, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui_Today_focus_btn, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_all(ui_Today_focus_btn, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_Today_focus_btn, lv_color_hex(0xD8F2E9), LV_PART_MAIN | LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(ui_Today_focus_btn, 255, LV_PART_MAIN | LV_STATE_PRESSED);
+    ui_Today_mascot_back = lv_image_create(ui_Today);
+    lv_image_set_src(ui_Today_mascot_back, &ui_img_focus_mascot_ready);
+    lv_obj_set_pos(ui_Today_mascot_back, FOCUS_MASCOT_RIGHT_X, FOCUS_MASCOT_RIGHT_Y);
+    lv_obj_remove_flag(ui_Today_mascot_back, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_Today_mascot_back, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_set_style_opa(ui_Today_mascot_back, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_transform_zoom(ui_Today_mascot_back, 268, 0);
 
-    ui_Today_focus_btn_label = lv_label_create(ui_Today_focus_btn);
-    lv_obj_center(ui_Today_focus_btn_label);
-    lv_label_set_text(ui_Today_focus_btn_label, "开始");
-    lv_obj_set_style_text_color(ui_Today_focus_btn_label, lv_color_hex(0x173B32), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_Today_focus_btn_label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_Today_focus_btn_label, &font_puhui_16_4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_Today_mascot_front = lv_image_create(ui_Today);
+    lv_image_set_src(ui_Today_mascot_front, &ui_img_focus_mascot_ready);
+    lv_obj_set_pos(ui_Today_mascot_front, FOCUS_MASCOT_RIGHT_X, FOCUS_MASCOT_RIGHT_Y);
+    lv_obj_remove_flag(ui_Today_mascot_front, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_transform_zoom(ui_Today_mascot_front, 268, 0);
+    lv_obj_add_flag(ui_Today_mascot_front, LV_OBJ_FLAG_GESTURE_BUBBLE);
 
-    ui_Today_focus_reset = lv_obj_create(ui_Today_focus_actions);
-    lv_obj_set_width(ui_Today_focus_reset, 62);
-    lv_obj_set_height(ui_Today_focus_reset, 36);
-    lv_obj_remove_flag(ui_Today_focus_reset, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(ui_Today_focus_reset, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_set_style_radius(ui_Today_focus_reset, 20, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_Today_focus_reset, lv_color_hex(0x173B32), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_Today_focus_reset, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(ui_Today_focus_reset, lv_color_hex(0xD8F2E9), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_opa(ui_Today_focus_reset, 220, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui_Today_focus_reset, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_pad_all(ui_Today_focus_reset, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_Today_duration_left = today_button_create(ui_Today, FOCUS_LEFT_BTN_X, FOCUS_LEFT_BTN_Y,
+                                                 FOCUS_LEFT_BTN_W, FOCUS_LEFT_BTN_H, 16,
+                                                 FOCUS_COLOR_READY_LEFT, FOCUS_COLOR_READY_ACCENT);
+    ui_Today_left_btn_icon = today_button_icon_label_create(ui_Today_duration_left, 9, FOCUS_LEFT_BTN_W);
+    ui_Today_left_btn_label = today_button_text_label_create(ui_Today_duration_left, 30, FOCUS_LEFT_BTN_W);
 
-    ui_Today_focus_reset_label = lv_label_create(ui_Today_focus_reset);
-    lv_obj_center(ui_Today_focus_reset_label);
-    lv_label_set_text(ui_Today_focus_reset_label, "重置");
-    lv_obj_set_style_text_color(ui_Today_focus_reset_label, lv_color_hex(0xD8F2E9), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui_Today_focus_reset_label, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui_Today_focus_reset_label, &font_puhui_16_4, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_Today_focus_btn = today_button_create(ui_Today, FOCUS_MAIN_BTN_X, FOCUS_MAIN_BTN_Y,
+                                             FOCUS_MAIN_BTN_W, FOCUS_MAIN_BTN_H, 18,
+                                             FOCUS_COLOR_READY_PRIMARY, FOCUS_COLOR_READY_ACCENT);
+    ui_Today_focus_btn_icon = today_button_icon_label_create(ui_Today_focus_btn, 10, FOCUS_MAIN_BTN_W);
+    ui_Today_focus_btn_label = today_button_text_label_create(ui_Today_focus_btn, 35, FOCUS_MAIN_BTN_W);
 
-    ui_Today_status_panel = today_panel_create(ui_Today_scroll, "环境建议", 0x28B86B);
-    ui_Today_status = today_label_create(ui_Today_status_panel, "等待传感器更新", 0, 0, 192, 0x173B32,
-                                         &font_puhui_16_4);
-    ui_Today_status_detail = today_label_create(ui_Today_status_panel, "先确定一件最重要的事", 0, 0, 192,
-                                                0x66716A, &font_puhui_16_4);
+    ui_Today_focus_reset = today_button_create(ui_Today, FOCUS_RIGHT_BTN_X, FOCUS_RIGHT_BTN_Y,
+                                               FOCUS_RIGHT_BTN_W, FOCUS_RIGHT_BTN_H, 16,
+                                               FOCUS_COLOR_READY_SECONDARY, FOCUS_COLOR_PAUSED_ACCENT);
+    ui_Today_focus_reset_icon = today_button_icon_label_create(ui_Today_focus_reset, 9, FOCUS_RIGHT_BTN_W);
+    ui_Today_focus_reset_label = today_button_text_label_create(ui_Today_focus_reset, 30, FOCUS_RIGHT_BTN_W);
 
-    ui_Today_env_panel = ui_Today_status_panel;
-    ui_Today_env_temp = today_value_create(ui_Today_status_panel, "温度：-- C", 0xE7FFF2, 0x173B32);
-    ui_Today_env_humidity = today_value_create(ui_Today_status_panel, "湿度：-- %", 0xFFF0C8, 0x5A4310);
-    ui_Today_env_air = today_value_create(ui_Today_status_panel, "空气：等待更新", 0xE9EEFF, 0x2F3B7A);
+    ui_Today_scrolldots = ui_Scrolldots_create(ui_Today);
+    today_highlight_page_dot(ui_Today_scrolldots, 1);
 
-    ui_Today_countdown_panel = today_panel_create(ui_Today_scroll, "今日目标", 0xF2A922);
-    ui_Today_exam = today_label_create(ui_Today_countdown_panel, "最近目标：等待时间同步", 0, 0, 192, 0x253530,
-                                       &font_puhui_16_4);
-    ui_Today_project = today_label_create(ui_Today_countdown_panel, "今天建议：只推进一步", 0, 0, 192, 0x66716A,
-                                          &font_puhui_16_4);
-
-    lv_obj_add_event_cb(ui_Today, ui_event_Today, LV_EVENT_ALL, NULL);
-}
-
-void ui_Today_screen_destroy(void)
-{
-    if(ui_Today) lv_obj_del(ui_Today);
-
-    ui_Today = NULL;
     ui_Today_header = NULL;
     ui_Today_title = NULL;
     ui_Today_date = NULL;
@@ -285,11 +284,78 @@ void ui_Today_screen_destroy(void)
     ui_Today_countdown_panel = NULL;
     ui_Today_exam = NULL;
     ui_Today_project = NULL;
+    ui_Today_duration_right = NULL;
+    ui_Today_task_panel = NULL;
+    ui_Today_task_label = NULL;
+    ui_Today_tip_panel = NULL;
+    ui_Today_tip_icon = NULL;
+    ui_Today_tip_label = NULL;
+    ui_Today_left_decor = NULL;
+    ui_Today_corner_vine = NULL;
+    ui_Today_top_back = NULL;
+    ui_Today_top_gear = NULL;
+    ui_Today_state_panel = NULL;
+    ui_Today_state_label = NULL;
+    ui_Today_primary_icon = ui_Today_focus_btn_icon;
+    ui_Today_secondary_icon = ui_Today_focus_reset_icon;
+    ui_Today_task_edit_icon = NULL;
+    ui_Today_center_icon = NULL;
+
+    lv_obj_add_event_cb(ui_Today, ui_event_Today, LV_EVENT_ALL, NULL);
+}
+
+void ui_Today_screen_destroy(void)
+{
+    if(ui_Today) {
+        lv_obj_del(ui_Today);
+    }
+
+    ui_Today = NULL;
+    ui_Today_header = NULL;
+    ui_Today_title = NULL;
+    ui_Today_date = NULL;
+    ui_Today_scroll = NULL;
+    ui_Today_timer_arc = NULL;
+    ui_Today_status_panel = NULL;
+    ui_Today_status = NULL;
+    ui_Today_status_detail = NULL;
+    ui_Today_env_panel = NULL;
+    ui_Today_env_temp = NULL;
+    ui_Today_env_humidity = NULL;
+    ui_Today_env_air = NULL;
+    ui_Today_countdown_panel = NULL;
+    ui_Today_exam = NULL;
+    ui_Today_project = NULL;
     ui_Today_focus_panel = NULL;
     ui_Today_focus_time = NULL;
+    ui_Today_focus_unit = NULL;
     ui_Today_focus_hint = NULL;
+    ui_Today_duration_left = NULL;
+    ui_Today_left_btn_icon = NULL;
+    ui_Today_left_btn_label = NULL;
+    ui_Today_duration_right = NULL;
+    ui_Today_task_panel = NULL;
+    ui_Today_task_label = NULL;
     ui_Today_focus_btn = NULL;
+    ui_Today_focus_btn_icon = NULL;
     ui_Today_focus_btn_label = NULL;
     ui_Today_focus_reset = NULL;
+    ui_Today_focus_reset_icon = NULL;
     ui_Today_focus_reset_label = NULL;
+    ui_Today_tip_panel = NULL;
+    ui_Today_tip_icon = NULL;
+    ui_Today_tip_label = NULL;
+    ui_Today_mascot_front = NULL;
+    ui_Today_mascot_back = NULL;
+    ui_Today_left_decor = NULL;
+    ui_Today_corner_vine = NULL;
+    ui_Today_top_back = NULL;
+    ui_Today_top_gear = NULL;
+    ui_Today_scrolldots = NULL;
+    ui_Today_state_panel = NULL;
+    ui_Today_state_label = NULL;
+    ui_Today_primary_icon = NULL;
+    ui_Today_secondary_icon = NULL;
+    ui_Today_task_edit_icon = NULL;
+    ui_Today_center_icon = NULL;
 }

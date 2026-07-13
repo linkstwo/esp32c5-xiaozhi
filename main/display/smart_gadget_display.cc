@@ -1,9 +1,10 @@
-#include "smart_gadget_display.h"
+﻿#include "smart_gadget_display.h"
 
 #include "application.h"
 #include "assets/lang_config.h"
 #include "board.h"
 #include "sensor_service.hpp"
+#include "smart_gadget_ui/screens/focus_ui_tokens.h"
 #include "smart_gadget_ui/ui.h"
 
 #include <cstdio>
@@ -25,6 +26,8 @@ SmartGadgetDisplay* g_smart_gadget_display = nullptr;
 
 namespace {
 constexpr int kFocusDurationSeconds = 25 * 60;
+constexpr uint32_t kMusicTrackTotalUi = 2;
+constexpr uint32_t kMusicVolumePercentUi = 80;
 
 struct CountdownTarget {
     const char* label;
@@ -49,7 +52,7 @@ const char* GetWeekdayText(int wday) {
     return kWeekdaysZh[wday];
 }
 
-int DaysUntilTarget(const struct tm& today, const CountdownTarget& target) {
+[[maybe_unused]] int DaysUntilTarget(const struct tm& today, const CountdownTarget& target) {
     struct tm today_midnight = today;
     today_midnight.tm_hour = 0;
     today_midnight.tm_min = 0;
@@ -68,6 +71,161 @@ int DaysUntilTarget(const struct tm& today, const CountdownTarget& target) {
         return -1;
     }
     return static_cast<int>((target_ts - today_ts) / (24 * 60 * 60));
+}
+
+constexpr int kFocusTimerPeriodMs = 250;
+constexpr int kFocusArcMaxValue = 1000;
+
+struct FocusPalette {
+    uint32_t bg;
+    uint32_t accent;
+    uint32_t left_bg;
+    uint32_t left_text;
+    uint32_t left_border;
+    uint32_t main_bg;
+    uint32_t main_text;
+    uint32_t main_border;
+    uint32_t right_bg;
+    uint32_t right_text;
+    uint32_t right_border;
+};
+
+bool FocusStateUsesCountdown(SmartGadgetDisplay::FocusUiState state) {
+    return state == SmartGadgetDisplay::FocusUiState::Running;
+}
+
+int InferMusicTrackIndex(const char* title) {
+    if (title == nullptr || title[0] == '\0') {
+        return -1;
+    }
+    if (std::strstr(title, "Boss Koto") != nullptr) {
+        return 0;
+    }
+    if (std::strstr(title, "Waiting 40 Lofi") != nullptr) {
+        return 1;
+    }
+    return -1;
+}
+
+FocusPalette GetFocusPalette(SmartGadgetDisplay::FocusUiState state) {
+    switch (state) {
+    case SmartGadgetDisplay::FocusUiState::Running:
+        return {FOCUS_COLOR_RUNNING_BG, FOCUS_COLOR_RUNNING_ACCENT,
+                FOCUS_COLOR_RUNNING_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_RUNNING_ACCENT,
+                FOCUS_COLOR_RUNNING_PRIMARY, FOCUS_COLOR_TEXT_MAIN, FOCUS_COLOR_PANEL_BORDER,
+                FOCUS_COLOR_RUNNING_SECONDARY, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_RUNNING_ACCENT};
+    case SmartGadgetDisplay::FocusUiState::Paused:
+        return {FOCUS_COLOR_PAUSED_BG, FOCUS_COLOR_PAUSED_ACCENT,
+                FOCUS_COLOR_PAUSED_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_RUNNING_ACCENT,
+                FOCUS_COLOR_PAUSED_PRIMARY, 0xFFFFFF, FOCUS_COLOR_PAUSED_ACCENT,
+                FOCUS_COLOR_PAUSED_SECONDARY, FOCUS_COLOR_TEXT_MAIN, FOCUS_COLOR_PAUSED_ACCENT};
+    case SmartGadgetDisplay::FocusUiState::Finished:
+        return {FOCUS_COLOR_FINISHED_BG, FOCUS_COLOR_FINISHED_ACCENT,
+                FOCUS_COLOR_FINISHED_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_FINISHED_ACCENT,
+                FOCUS_COLOR_FINISHED_PRIMARY, 0xFFFFFF, FOCUS_COLOR_FINISHED_ACCENT,
+                FOCUS_COLOR_FINISHED_SECONDARY, FOCUS_COLOR_TEXT_MAIN, FOCUS_COLOR_FINISHED_ACCENT};
+    case SmartGadgetDisplay::FocusUiState::Ready:
+    default:
+        return {FOCUS_COLOR_READY_BG, FOCUS_COLOR_READY_ACCENT,
+                FOCUS_COLOR_READY_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_READY_ACCENT,
+                FOCUS_COLOR_READY_PRIMARY, 0xFFFFFF, FOCUS_COLOR_READY_ACCENT,
+                FOCUS_COLOR_READY_SECONDARY, FOCUS_COLOR_PAUSED_ACCENT, FOCUS_COLOR_PAUSED_ACCENT};
+    }
+}
+
+struct FocusButtonContent {
+    const char* icon;
+    const char* text;
+};
+
+struct FocusButtonSet {
+    FocusButtonContent left;
+    FocusButtonContent main;
+    FocusButtonContent right;
+};
+
+FocusButtonSet GetFocusButtons(SmartGadgetDisplay::FocusUiState state) {
+    switch (state) {
+    case SmartGadgetDisplay::FocusUiState::Running:
+        return {{FONT_AWESOME_PAUSE, "暂停"}, {FONT_AWESOME_STOP, "结束"}, {"+", "5分"}};
+    case SmartGadgetDisplay::FocusUiState::Paused:
+        return {{FONT_AWESOME_ARROWS_ROTATE, "重置"}, {FONT_AWESOME_PLAY, "继续"}, {FONT_AWESOME_STOP, "结束"}};
+    case SmartGadgetDisplay::FocusUiState::Finished:
+        return {{FONT_AWESOME_CIRCLE_CHECK, "休息"}, {FONT_AWESOME_PLAY, "再来一轮"}, {FONT_AWESOME_STOP, "结束"}};
+    case SmartGadgetDisplay::FocusUiState::Ready:
+    default:
+        return {{FONT_AWESOME_CLOCK, "专注"}, {FONT_AWESOME_PLAY, "开始"}, {FONT_AWESOME_ARROWS_ROTATE, "重置"}};
+    }
+}
+
+const lv_image_dsc_t* GetFocusMascot(SmartGadgetDisplay::FocusUiState state) {
+    switch (state) {
+    case SmartGadgetDisplay::FocusUiState::Running:
+        return &ui_img_focus_mascot_running;
+    case SmartGadgetDisplay::FocusUiState::Paused:
+        return &ui_img_focus_mascot_paused;
+    case SmartGadgetDisplay::FocusUiState::Finished:
+        return &ui_img_focus_mascot_finished;
+    case SmartGadgetDisplay::FocusUiState::Ready:
+    default:
+        return &ui_img_focus_mascot_ready;
+    }
+}
+
+lv_point_t GetFocusMascotPosition(SmartGadgetDisplay::FocusUiState state) {
+    if (state == SmartGadgetDisplay::FocusUiState::Paused) {
+        return {FOCUS_MASCOT_LEFT_X, FOCUS_MASCOT_LEFT_Y};
+    }
+    return {FOCUS_MASCOT_RIGHT_X, FOCUS_MASCOT_RIGHT_Y};
+}
+
+void AnimateObjectOpacity(lv_obj_t* obj, int32_t from, int32_t to, uint32_t duration) {
+    if (obj == nullptr) {
+        return;
+    }
+
+    lv_anim_t anim;
+    lv_anim_init(&anim);
+    lv_anim_set_var(&anim, obj);
+    lv_anim_set_values(&anim, from, to);
+    lv_anim_set_duration(&anim, duration);
+    lv_anim_set_exec_cb(&anim, [](void* var, int32_t value) {
+        lv_obj_set_style_opa(static_cast<lv_obj_t*>(var), value, LV_PART_MAIN | LV_STATE_DEFAULT);
+    });
+    lv_anim_start(&anim);
+}
+
+void SetTodayButtonLabel(lv_obj_t* icon_obj, lv_obj_t* text_obj, const char* icon_text,
+                         const char* label_text, uint32_t color) {
+    if (icon_obj != nullptr) {
+        lv_obj_set_style_text_color(icon_obj, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_label_set_text(icon_obj, icon_text != nullptr ? icon_text : "");
+        if (icon_text != nullptr && icon_text[0] != '\0') {
+            lv_obj_clear_flag(icon_obj, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(icon_obj, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (text_obj != nullptr) {
+        lv_obj_set_style_text_color(text_obj, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_label_set_text(text_obj, label_text != nullptr ? label_text : "");
+    }
+}
+
+void AnimateArcValue(lv_obj_t* arc, int32_t value) {
+    if (arc == nullptr) {
+        return;
+    }
+
+    lv_anim_t anim;
+    lv_anim_init(&anim);
+    lv_anim_set_var(&anim, arc);
+    lv_anim_set_values(&anim, lv_arc_get_value(arc), value);
+    lv_anim_set_duration(&anim, 260);
+    lv_anim_set_exec_cb(&anim, [](void* var, int32_t v) {
+        lv_arc_set_value(static_cast<lv_obj_t*>(var), v);
+    });
+    lv_anim_start(&anim);
 }
 
 }
@@ -97,6 +255,12 @@ void SmartGadgetDisplay::ApplyTodayFont(lv_obj_t* obj) {
     }
 }
 
+void SmartGadgetDisplay::ApplyIconFont(lv_obj_t* obj) {
+    if (obj != nullptr) {
+        lv_obj_set_style_text_font(obj, &BUILTIN_ICON_FONT, 0);
+    }
+}
+
 void SmartGadgetDisplay::ApplyInitialText() {
     if (ui_Smart_Gadget != nullptr) {
         lv_label_set_text(ui_Smart_Gadget, "XiaoZhi AI");
@@ -111,9 +275,7 @@ void SmartGadgetDisplay::ApplyInitialText() {
     time_t now = time(nullptr);
     struct tm timeinfo = {};
     localtime_r(&now, &timeinfo);
-    if (timeinfo.tm_year >= (2025 - 1900)) {
-        ApplyTodayText(timeinfo);
-    }
+    ApplyTodayText(timeinfo);
 }
 
 void SmartGadgetDisplay::ApplyCallText() {
@@ -134,28 +296,15 @@ void SmartGadgetDisplay::ApplyMusicButtonState() {
     }
 
     if (music_playing_) {
-        if (ui_Play != nullptr) {
-            lv_obj_add_flag(ui_Play, LV_OBJ_FLAG_HIDDEN);
-        }
-        if (music_pause_icon_ == nullptr) {
-            music_pause_icon_ = lv_label_create(ui_Play_btn);
-            lv_obj_center(music_pause_icon_);
-            lv_obj_set_x(music_pause_icon_, 1);
-            lv_label_set_text(music_pause_icon_, FONT_AWESOME_PAUSE);
-            lv_obj_set_style_text_font(music_pause_icon_, &BUILTIN_ICON_FONT, 0);
-            lv_obj_set_style_text_color(music_pause_icon_, lv_color_hex(0xFFFFFF), 0);
-            lv_obj_set_style_text_opa(music_pause_icon_, 255, 0);
-        } else {
-            lv_obj_clear_flag(music_pause_icon_, LV_OBJ_FLAG_HIDDEN);
-        }
+        music_ui_state_ = MusicUiState::Playing;
+        music_session_started_ = true;
     } else {
-        if (ui_Play != nullptr) {
-            lv_obj_clear_flag(ui_Play, LV_OBJ_FLAG_HIDDEN);
-        }
-        if (music_pause_icon_ != nullptr) {
-            lv_obj_add_flag(music_pause_icon_, LV_OBJ_FLAG_HIDDEN);
-        }
+        music_ui_state_ = music_session_started_ ? MusicUiState::Paused : MusicUiState::Idle;
     }
+
+    ui_music_compact_set_state(static_cast<uint8_t>(music_ui_state_));
+    ui_music_compact_set_track_index(music_track_index_, music_track_total_);
+    ui_music_compact_set_volume(music_volume_percent_);
 }
 
 void SmartGadgetDisplay::ApplyWeatherText() {
@@ -220,11 +369,14 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
         char time_text[16];
         strftime(time_text, sizeof(time_text), "%H:%M", &timeinfo);
         lv_label_set_text(ui_Clock_Number, time_text);
+        if (ui_Clock_NumberShadow != nullptr) {
+            lv_label_set_text(ui_Clock_NumberShadow, time_text);
+        }
     }
 
     if (ui_Clock_Date != nullptr) {
         char date_text[32];
-        snprintf(date_text, sizeof(date_text), "%02d月%02d日 %s",
+        snprintf(date_text, sizeof(date_text), "%02d-%02d %s",
                  timeinfo.tm_mon + 1, timeinfo.tm_mday, GetWeekdayText(timeinfo.tm_wday));
         ApplyTodayFont(ui_Clock_Date);
         lv_label_set_text(ui_Clock_Date, date_text);
@@ -241,7 +393,7 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
 
         if (!has_sensor_data) {
             snprintf(status_text, sizeof(status_text), "等待传感器");
-            snprintf(temp_text, sizeof(temp_text), "温 -- C");
+            snprintf(temp_text, sizeof(temp_text), "温 --°C");
             snprintf(humidity_text, sizeof(humidity_text), "湿 --%%");
         } else {
             if (sensor_data.temperature >= 30.0f) {
@@ -255,7 +407,7 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
             } else {
                 snprintf(status_text, sizeof(status_text), "状态稳定");
             }
-            snprintf(temp_text, sizeof(temp_text), "温 %.0f C", sensor_data.temperature);
+            snprintf(temp_text, sizeof(temp_text), "温 %.0f°C", sensor_data.temperature);
             snprintf(humidity_text, sizeof(humidity_text), "湿 %.0f%%", sensor_data.humidity);
         }
 
@@ -387,179 +539,289 @@ void SmartGadgetDisplay::ApplyDeviceText() {
 }
 
 void SmartGadgetDisplay::UpdateFocusCountdown(int64_t now_us) {
-    if (!focus_running_) {
+    if (!FocusStateUsesCountdown(focus_state_)) {
         return;
     }
 
     const int64_t remaining_us = focus_deadline_us_ - now_us;
-    if (remaining_us <= 0) {
-        focus_running_ = false;
-        focus_deadline_us_ = 0;
-        focus_remaining_seconds_ = 0;
+    if (remaining_us > 0) {
+        focus_remaining_seconds_ = static_cast<int32_t>((remaining_us + 999999) / 1000000);
         return;
     }
 
-    focus_remaining_seconds_ = static_cast<int32_t>((remaining_us + 999999) / 1000000);
+    focus_deadline_us_ = 0;
+    focus_remaining_seconds_ = 0;
+    if (!focus_finished_counted_) {
+        ++focus_completed_sessions_today_;
+        focus_finished_counted_ = true;
+    }
+    TransitionFocusState(FocusUiState::Finished);
 }
 
-void SmartGadgetDisplay::ApplyTodayText(const struct tm& timeinfo) {
+void SmartGadgetDisplay::SetFocusDuration(int32_t duration_seconds) {
+    if (focus_state_ != FocusUiState::Ready) {
+        return;
+    }
+
+    (void)duration_seconds;
+    focus_selected_duration_seconds_ = kFocusDurationSeconds;
+    focus_active_duration_seconds_ = kFocusDurationSeconds;
+    focus_remaining_seconds_ = kFocusDurationSeconds;
+    focus_finished_counted_ = false;
+    RenderTodayFocusState(true);
+}
+
+void SmartGadgetDisplay::StartFocusCountdown(int32_t duration_seconds, FocusUiState running_state) {
+    focus_remaining_seconds_ = duration_seconds;
+    focus_deadline_us_ = esp_timer_get_time() + static_cast<int64_t>(duration_seconds) * 1000000;
+    focus_state_ = running_state;
+    if (focus_ui_timer_ != nullptr) {
+        lv_timer_set_period(focus_ui_timer_, kFocusTimerPeriodMs);
+        lv_timer_resume(focus_ui_timer_);
+    }
+}
+
+void SmartGadgetDisplay::StopFocusCountdown() {
+    focus_deadline_us_ = 0;
+    if (focus_ui_timer_ != nullptr) {
+        lv_timer_pause(focus_ui_timer_);
+    }
+}
+
+void SmartGadgetDisplay::ExtendFocusTime(int32_t extra_seconds) {
+    if (focus_state_ != FocusUiState::Running || extra_seconds <= 0) {
+        return;
+    }
+
+    constexpr int32_t kFocusMaxDurationSeconds = 60 * 60;
+    const int32_t available = kFocusMaxDurationSeconds - focus_active_duration_seconds_;
+    if (available <= 0) {
+        return;
+    }
+
+    if (extra_seconds > available) {
+        extra_seconds = available;
+    }
+
+    focus_active_duration_seconds_ += extra_seconds;
+    focus_remaining_seconds_ += extra_seconds;
+    focus_deadline_us_ += static_cast<int64_t>(extra_seconds) * 1000000;
+}
+
+void SmartGadgetDisplay::TransitionFocusState(FocusUiState next_state) {
+    focus_state_ = next_state;
+    if (!FocusStateUsesCountdown(next_state)) {
+        StopFocusCountdown();
+    } else if (focus_ui_timer_ != nullptr) {
+        lv_timer_set_period(focus_ui_timer_, kFocusTimerPeriodMs);
+        lv_timer_resume(focus_ui_timer_);
+    }
+
+    RenderTodayFocusState(true);
+}
+
+void SmartGadgetDisplay::UpdateFocusActionButtons(FocusUiState state) {
+    const FocusButtonSet buttons = GetFocusButtons(state);
+    const FocusPalette palette = GetFocusPalette(state);
+
+    ApplyIconFont(ui_Today_left_btn_icon);
+    if (ui_Today_left_btn_label != nullptr) {
+        ApplyTodayFont(ui_Today_left_btn_label);
+    }
+    ApplyIconFont(ui_Today_focus_btn_icon);
+    if (ui_Today_focus_btn_label != nullptr) {
+        ApplyTodayFont(ui_Today_focus_btn_label);
+    }
+    ApplyIconFont(ui_Today_focus_reset_icon);
+    if (ui_Today_focus_reset_label != nullptr) {
+        ApplyTodayFont(ui_Today_focus_reset_label);
+    }
+
+    SetTodayButtonLabel(ui_Today_left_btn_icon, ui_Today_left_btn_label,
+                        buttons.left.icon, buttons.left.text, palette.left_text);
+    SetTodayButtonLabel(ui_Today_focus_btn_icon, ui_Today_focus_btn_label,
+                        buttons.main.icon, buttons.main.text, palette.main_text);
+    SetTodayButtonLabel(ui_Today_focus_reset_icon, ui_Today_focus_reset_label,
+                        buttons.right.icon, buttons.right.text, palette.right_text);
+}
+
+void SmartGadgetDisplay::UpdateFocusPalette(FocusUiState state) {
+    const FocusPalette palette = GetFocusPalette(state);
+
+    if (ui_Today != nullptr) {
+        lv_obj_set_style_bg_color(ui_Today, lv_color_hex(palette.bg), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_focus_time != nullptr) {
+        lv_obj_set_style_text_color(ui_Today_focus_time, lv_color_hex(FOCUS_COLOR_TEXT_MAIN), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_focus_unit != nullptr) {
+        lv_obj_set_style_text_color(ui_Today_focus_unit, lv_color_hex(FOCUS_COLOR_TEXT_MAIN), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_focus_hint != nullptr) {
+        lv_obj_set_style_text_color(ui_Today_focus_hint, lv_color_hex(FOCUS_COLOR_TEXT_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_timer_arc != nullptr) {
+        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_TRACK), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(palette.accent), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_focus_panel != nullptr) {
+        lv_obj_set_style_border_color(ui_Today_focus_panel, lv_color_hex(palette.accent), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_duration_left != nullptr) {
+        lv_obj_set_style_bg_color(ui_Today_duration_left, lv_color_hex(palette.left_bg), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_color(ui_Today_duration_left, lv_color_hex(palette.left_border), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_focus_btn != nullptr) {
+        lv_obj_set_style_bg_color(ui_Today_focus_btn, lv_color_hex(palette.main_bg), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_color(ui_Today_focus_btn, lv_color_hex(palette.main_border), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_focus_reset != nullptr) {
+        lv_obj_set_style_bg_color(ui_Today_focus_reset, lv_color_hex(palette.right_bg), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_color(ui_Today_focus_reset, lv_color_hex(palette.right_border), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+}
+
+void SmartGadgetDisplay::UpdateFocusMascot(FocusUiState state, bool animate) {
+    const lv_image_dsc_t* mascot = GetFocusMascot(state);
+    const lv_point_t position = GetFocusMascotPosition(state);
+
+    if (ui_Today_mascot_front == nullptr) {
+        return;
+    }
+
+    if (!animate || focus_rendered_state_ == state || ui_Today_mascot_back == nullptr) {
+        lv_image_set_src(ui_Today_mascot_front, mascot);
+        lv_obj_set_pos(ui_Today_mascot_front, position.x, position.y);
+        lv_obj_set_style_opa(ui_Today_mascot_front, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        if (ui_Today_mascot_back != nullptr) {
+            lv_obj_set_style_opa(ui_Today_mascot_back, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+        }
+        return;
+    }
+
+    const void* previous_src = lv_image_get_src(ui_Today_mascot_front);
+    lv_image_set_src(ui_Today_mascot_back, previous_src != nullptr ? previous_src : mascot);
+    lv_obj_set_pos(ui_Today_mascot_back, lv_obj_get_x(ui_Today_mascot_front), lv_obj_get_y(ui_Today_mascot_front));
+    lv_obj_set_style_opa(ui_Today_mascot_back, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    lv_image_set_src(ui_Today_mascot_front, mascot);
+    lv_obj_set_pos(ui_Today_mascot_front, position.x, position.y);
+    lv_obj_set_style_opa(ui_Today_mascot_front, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    AnimateObjectOpacity(ui_Today_mascot_back, LV_OPA_COVER, LV_OPA_TRANSP, 220);
+    AnimateObjectOpacity(ui_Today_mascot_front, LV_OPA_TRANSP, LV_OPA_COVER, 220);
+}
+
+void SmartGadgetDisplay::UpdateFocusArc(int32_t arc_value, bool animate) {
+    if (ui_Today_timer_arc == nullptr) {
+        return;
+    }
+
+    if (arc_value < 0) {
+        arc_value = 0;
+    }
+    if (arc_value > kFocusArcMaxValue) {
+        arc_value = kFocusArcMaxValue;
+    }
+
+    if (animate && focus_last_arc_value_ >= 0) {
+        AnimateArcValue(ui_Today_timer_arc, arc_value);
+    } else {
+        lv_arc_set_value(ui_Today_timer_arc, arc_value);
+    }
+    focus_last_arc_value_ = arc_value;
+}
+
+void SmartGadgetDisplay::RenderTodayFocusState(bool animate) {
     if (ui_Today == nullptr) {
         return;
     }
 
-    EnsureSensorServiceStarted();
-    SensorData sensor_data = {};
-    const bool has_sensor_data = SensorService::getInstance().getLatestData(sensor_data);
-    UpdateFocusCountdown(esp_timer_get_time());
+    char focus_time_text[24];
+    const int32_t total_seconds = focus_active_duration_seconds_ > 0 ? focus_active_duration_seconds_ : kFocusDurationSeconds;
+    int32_t arc_value = kFocusArcMaxValue;
+    int32_t time_zoom = 148;
+    int32_t time_y = 50;
+    int32_t unit_y = 90;
+    int32_t hint_y = 19;
+    bool show_unit = false;
+    bool show_hint = false;
+    const lv_font_t* time_font = &ui_font_Number;
 
-    char date_text[48];
-    char status_text[64];
-    char status_detail[96];
-    char temp_text[64];
-    char humidity_text[64];
-    char air_text[64];
-    char exam_text[96];
-    char project_text[96];
-    char focus_time_text[16];
-    char focus_hint_text[96];
-    char focus_button_text[24];
-    const int exam_days = DaysUntilTarget(timeinfo, kCountdownTargets[0]);
-    const int project_days = DaysUntilTarget(timeinfo, kCountdownTargets[1]);
-    const CountdownTarget* primary_target = &kCountdownTargets[0];
-    int primary_days = exam_days;
+    UpdateFocusPalette(focus_state_);
+    UpdateFocusActionButtons(focus_state_);
+    UpdateFocusMascot(focus_state_, animate);
 
-    snprintf(date_text, sizeof(date_text), "%02d月%02d日 %s",
-             timeinfo.tm_mon + 1, timeinfo.tm_mday, GetWeekdayText(timeinfo.tm_wday));
-
-    if ((primary_days < 0 && project_days >= 0) ||
-        (project_days >= 0 && (primary_days < 0 || project_days < primary_days))) {
-        primary_target = &kCountdownTargets[1];
-        primary_days = project_days;
-    }
-
-    if (!has_sensor_data) {
-        snprintf(status_text, sizeof(status_text), "等待传感器更新");
-        snprintf(status_detail, sizeof(status_detail), "先确定一件最重要的事");
-        snprintf(temp_text, sizeof(temp_text), "温度：-- C");
-        snprintf(humidity_text, sizeof(humidity_text), "湿度：-- %%");
-        snprintf(air_text, sizeof(air_text), "空气：等待更新");
-        snprintf(project_text, sizeof(project_text), "今天建议：只推进一步");
-    } else {
-        if (sensor_data.temperature >= 30.0f) {
-            snprintf(status_text, sizeof(status_text), "环境偏热");
-            snprintf(status_detail, sizeof(status_detail), "先补水，再开始专注");
-            snprintf(project_text, sizeof(project_text), "今天建议：降温后开一轮");
-        } else if (sensor_data.humidity >= 70.0f || sensor_data.iaq > 150.0f) {
-            snprintf(status_text, sizeof(status_text), "建议通风");
-            snprintf(status_detail, sizeof(status_detail), "空气有点闷，先改善环境");
-            snprintf(project_text, sizeof(project_text), "今天建议：通风后开一轮");
-        } else if (sensor_data.temperature >= 22.0f && sensor_data.temperature <= 28.0f &&
-                   sensor_data.humidity >= 40.0f && sensor_data.humidity <= 65.0f &&
-                   sensor_data.iaq <= 100.0f) {
-            snprintf(status_text, sizeof(status_text), "适合专注");
-            if (focus_running_) {
-                snprintf(status_detail, sizeof(status_detail), "保持当前节奏，别切任务");
-                snprintf(project_text, sizeof(project_text), "今天建议：完成当前这一轮");
-            } else {
-                snprintf(status_detail, sizeof(status_detail), "环境不错，适合推进任务");
-                snprintf(project_text, sizeof(project_text), "今天建议：开始 25 分钟");
-            }
-        } else {
-            snprintf(status_text, sizeof(status_text), "可以开始");
-            snprintf(status_detail, sizeof(status_detail), "先做一件事，边做边调整");
-            snprintf(project_text, sizeof(project_text), "今天建议：先开始，再调整");
-        }
-
-        if (sensor_data.iaq <= 100.0f) {
-            snprintf(air_text, sizeof(air_text), "空气：良好");
-        } else if (sensor_data.iaq <= 150.0f) {
-            snprintf(air_text, sizeof(air_text), "空气：一般");
-        } else {
-            snprintf(air_text, sizeof(air_text), "空气：需要通风");
-        }
-        snprintf(temp_text, sizeof(temp_text), "温度：%.0f C", sensor_data.temperature);
-        snprintf(humidity_text, sizeof(humidity_text), "湿度：%.0f%%", sensor_data.humidity);
+    switch (focus_state_) {
+    case FocusUiState::Running:
+        snprintf(focus_time_text, sizeof(focus_time_text), "%02d:%02d",
+                 static_cast<int>(focus_remaining_seconds_ / 60),
+                 static_cast<int>(focus_remaining_seconds_ % 60));
+        arc_value = total_seconds > 0 ? (focus_remaining_seconds_ * kFocusArcMaxValue) / total_seconds : 0;
+        time_zoom = 144;
+        time_y = 52;
+        break;
+    case FocusUiState::Paused:
+        snprintf(focus_time_text, sizeof(focus_time_text), "%02d:%02d",
+                 static_cast<int>(focus_remaining_seconds_ / 60),
+                 static_cast<int>(focus_remaining_seconds_ % 60));
+        arc_value = total_seconds > 0 ? (focus_remaining_seconds_ * kFocusArcMaxValue) / total_seconds : 0;
+        time_zoom = 144;
+        time_y = 52;
+        break;
+    case FocusUiState::Finished:
+        snprintf(focus_time_text, sizeof(focus_time_text), "%s", "完成");
+        arc_value = kFocusArcMaxValue;
+        show_unit = false;
+        show_hint = true;
+        time_font = &font_puhui_16_4;
+        time_zoom = 220;
+        time_y = 58;
+        break;
+    case FocusUiState::Ready:
+    default:
+        snprintf(focus_time_text, sizeof(focus_time_text), "%02ld:%02d",
+                 static_cast<long>(focus_selected_duration_seconds_ / 60), 0);
+        arc_value = kFocusArcMaxValue;
+        break;
     }
 
-    if (primary_days < 0) {
-        snprintf(exam_text, sizeof(exam_text), "最近目标：完成一轮专注");
-    } else if (primary_days == 0) {
-        snprintf(exam_text, sizeof(exam_text), "最近目标：%s今天", primary_target->label);
-    } else {
-        snprintf(exam_text, sizeof(exam_text), "最近目标：%s D-%d", primary_target->label, primary_days);
-    }
-
-    snprintf(focus_time_text, sizeof(focus_time_text), "%02d:%02d",
-             static_cast<int>(focus_remaining_seconds_ / 60),
-             static_cast<int>(focus_remaining_seconds_ % 60));
-
-    if (focus_running_) {
-        snprintf(focus_hint_text, sizeof(focus_hint_text), "专注中，别切换任务");
-        snprintf(focus_button_text, sizeof(focus_button_text), "暂停");
-    } else if (focus_remaining_seconds_ == 0) {
-        snprintf(focus_hint_text, sizeof(focus_hint_text), "这一轮完成了，休息一下");
-        snprintf(focus_button_text, sizeof(focus_button_text), "开始");
-    } else if (focus_remaining_seconds_ < kFocusDurationSeconds) {
-        snprintf(focus_hint_text, sizeof(focus_hint_text), "已暂停，可以继续这一轮");
-        snprintf(focus_button_text, sizeof(focus_button_text), "继续");
-    } else {
-        snprintf(focus_hint_text, sizeof(focus_hint_text), "25 分钟，只做当前这一件事");
-        snprintf(focus_button_text, sizeof(focus_button_text), "开始");
-    }
-
-    if (ui_Today_title != nullptr) {
-        ApplyTodayFont(ui_Today_title);
-        lv_label_set_text(ui_Today_title, "今日专注");
-    }
-    if (ui_Today_date != nullptr) {
-        ApplyTodayFont(ui_Today_date);
-        lv_label_set_text(ui_Today_date, date_text);
-    }
-    if (ui_Today_status != nullptr) {
-        ApplyTodayFont(ui_Today_status);
-        lv_label_set_text(ui_Today_status, status_text);
-    }
-    if (ui_Today_status_detail != nullptr) {
-        ApplyTodayFont(ui_Today_status_detail);
-        lv_label_set_text(ui_Today_status_detail, status_detail);
-    }
-    if (ui_Today_env_temp != nullptr) {
-        ApplyTodayFont(ui_Today_env_temp);
-        lv_label_set_text(ui_Today_env_temp, temp_text);
-    }
-    if (ui_Today_env_humidity != nullptr) {
-        ApplyTodayFont(ui_Today_env_humidity);
-        lv_label_set_text(ui_Today_env_humidity, humidity_text);
-    }
-    if (ui_Today_env_air != nullptr) {
-        ApplyTodayFont(ui_Today_env_air);
-        lv_label_set_text(ui_Today_env_air, air_text);
-    }
-    if (ui_Today_exam != nullptr) {
-        ApplyTodayFont(ui_Today_exam);
-        lv_label_set_text(ui_Today_exam, exam_text);
-    }
-    if (ui_Today_project != nullptr) {
-        ApplyTodayFont(ui_Today_project);
-        lv_label_set_text(ui_Today_project, project_text);
-    }
     if (ui_Today_focus_time != nullptr) {
+        lv_obj_set_style_text_font(ui_Today_focus_time, time_font, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_y(ui_Today_focus_time, time_y);
+        lv_obj_set_style_transform_zoom(ui_Today_focus_time, time_zoom, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_label_set_text(ui_Today_focus_time, focus_time_text);
     }
+    if (ui_Today_focus_unit != nullptr) {
+        ApplyTodayFont(ui_Today_focus_unit);
+        lv_obj_set_y(ui_Today_focus_unit, unit_y);
+        lv_label_set_text(ui_Today_focus_unit, "分钟");
+        if (show_unit) {
+            lv_obj_clear_flag(ui_Today_focus_unit, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(ui_Today_focus_unit, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
     if (ui_Today_focus_hint != nullptr) {
-        ApplyTodayFont(ui_Today_focus_hint);
-        lv_label_set_text(ui_Today_focus_hint, focus_hint_text);
+        if (show_hint) {
+            ApplyTodayFont(ui_Today_focus_hint);
+            lv_obj_set_y(ui_Today_focus_hint, hint_y);
+            lv_label_set_text(ui_Today_focus_hint, "休息一下");
+            lv_obj_clear_flag(ui_Today_focus_hint, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(ui_Today_focus_hint, LV_OBJ_FLAG_HIDDEN);
+        }
     }
-    if (ui_Today_focus_btn_label != nullptr) {
-        ApplyTodayFont(ui_Today_focus_btn_label);
-        lv_label_set_text(ui_Today_focus_btn_label, focus_button_text);
-    }
-    if (ui_Today_focus_reset_label != nullptr) {
-        ApplyTodayFont(ui_Today_focus_reset_label);
-        lv_label_set_text(ui_Today_focus_reset_label, "重置");
-    }
+
+    UpdateFocusArc(arc_value, animate);
+    focus_rendered_state_ = focus_state_;
 }
 
+void SmartGadgetDisplay::ApplyTodayText(const struct tm& timeinfo) {
+    (void)timeinfo;
+    UpdateFocusCountdown(esp_timer_get_time());
+    RenderTodayFocusState(false);
+}
 void SmartGadgetDisplay::UpdateStatusBar(bool update_all) {
     (void)update_all;
     if (!ui_ready_) {
@@ -569,12 +831,10 @@ void SmartGadgetDisplay::UpdateStatusBar(bool update_all) {
     time_t now = time(nullptr);
     struct tm timeinfo = {};
     localtime_r(&now, &timeinfo);
-    if (timeinfo.tm_year < (2025 - 1900)) {
-        return;
-    }
-
     DisplayLockGuard lock(this);
-    ApplyClockText(timeinfo);
+    if (timeinfo.tm_year >= (2025 - 1900)) {
+        ApplyClockText(timeinfo);
+    }
 
     if (lv_screen_active() == ui_Today) {
         ApplyTodayText(timeinfo);
@@ -602,9 +862,7 @@ void SmartGadgetDisplay::RefreshLiveData() {
         time_t now = time(nullptr);
         struct tm timeinfo = {};
         localtime_r(&now, &timeinfo);
-        if (timeinfo.tm_year >= (2025 - 1900)) {
-            ApplyTodayText(timeinfo);
-        }
+        ApplyTodayText(timeinfo);
     } else if (active_screen == ui_Weather) {
         ApplyWeatherText();
     } else if (active_screen == ui_Device) {
@@ -616,6 +874,19 @@ void SmartGadgetDisplay::LiveDataTimerCallback(lv_timer_t* timer) {
     auto* display = static_cast<SmartGadgetDisplay*>(lv_timer_get_user_data(timer));
     if (display != nullptr) {
         display->RefreshLiveData();
+    }
+}
+
+void SmartGadgetDisplay::FocusUiTimerCallback(lv_timer_t* timer) {
+    auto* display = static_cast<SmartGadgetDisplay*>(lv_timer_get_user_data(timer));
+    if (display == nullptr || !display->ui_ready_) {
+        return;
+    }
+
+    DisplayLockGuard lock(display);
+    display->UpdateFocusCountdown(esp_timer_get_time());
+    if (lv_screen_active() == ui_Today) {
+        display->RenderTodayFocusState(false);
     }
 }
 
@@ -649,18 +920,26 @@ static void smart_gadget_music_next_event_cb(lv_event_t* e) {
     }
 }
 
-static void smart_gadget_today_focus_event_cb(lv_event_t* e) {
+static void smart_gadget_today_left_event_cb(lv_event_t* e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
         if (g_smart_gadget_display != nullptr) {
-            g_smart_gadget_display->ToggleFocusTimer();
+            g_smart_gadget_display->HandleTodayLeftAction();
         }
     }
 }
 
-static void smart_gadget_today_reset_event_cb(lv_event_t* e) {
+static void smart_gadget_today_main_event_cb(lv_event_t* e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
         if (g_smart_gadget_display != nullptr) {
-            g_smart_gadget_display->ResetFocusTimer();
+            g_smart_gadget_display->HandleTodayMainAction();
+        }
+    }
+}
+
+static void smart_gadget_today_right_event_cb(lv_event_t* e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        if (g_smart_gadget_display != nullptr) {
+            g_smart_gadget_display->HandleTodayRightAction();
         }
     }
 }
@@ -711,64 +990,129 @@ void SmartGadgetDisplay::BindMusicButtons() {
 }
 
 void SmartGadgetDisplay::BindTodayButtons() {
-    if (today_buttons_bound_ || ui_Today_focus_btn == nullptr || ui_Today_focus_reset == nullptr) {
+    if (today_buttons_bound_ || ui_Today_duration_left == nullptr ||
+        ui_Today_focus_btn == nullptr || ui_Today_focus_reset == nullptr) {
         return;
     }
 
+    lv_obj_add_flag(ui_Today_duration_left, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_Today_duration_left, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(ui_Today_duration_left, smart_gadget_today_left_event_cb, LV_EVENT_CLICKED, nullptr);
+
     lv_obj_add_flag(ui_Today_focus_btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(ui_Today_focus_btn, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_add_event_cb(ui_Today_focus_btn, smart_gadget_today_focus_event_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(ui_Today_focus_btn, smart_gadget_today_main_event_cb, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_add_flag(ui_Today_focus_reset, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(ui_Today_focus_reset, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_add_event_cb(ui_Today_focus_reset, smart_gadget_today_reset_event_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(ui_Today_focus_reset, smart_gadget_today_right_event_cb, LV_EVENT_CLICKED, nullptr);
 
     today_buttons_bound_ = true;
 }
 
-void SmartGadgetDisplay::ToggleFocusTimer() {
+void SmartGadgetDisplay::HandleTodayLeftAction() {
     if (!setup_ui_called_) {
         return;
     }
 
     DisplayLockGuard lock(this);
     const int64_t now_us = esp_timer_get_time();
-    if (focus_running_) {
+    switch (focus_state_) {
+    case FocusUiState::Running:
         UpdateFocusCountdown(now_us);
-        focus_running_ = false;
-        focus_deadline_us_ = 0;
-    } else {
-        if (focus_remaining_seconds_ <= 0 || focus_remaining_seconds_ > kFocusDurationSeconds) {
-            focus_remaining_seconds_ = kFocusDurationSeconds;
+        if (focus_state_ != FocusUiState::Running) {
+            break;
         }
-        focus_deadline_us_ = now_us + static_cast<int64_t>(focus_remaining_seconds_) * 1000000;
-        focus_running_ = true;
-    }
-
-    time_t now = time(nullptr);
-    struct tm timeinfo = {};
-    localtime_r(&now, &timeinfo);
-    if (timeinfo.tm_year >= (2025 - 1900)) {
-        ApplyTodayText(timeinfo);
+        StopFocusCountdown();
+        focus_state_ = FocusUiState::Paused;
+        RenderTodayFocusState(true);
+        break;
+    case FocusUiState::Paused:
+        focus_remaining_seconds_ = focus_selected_duration_seconds_;
+        focus_active_duration_seconds_ = focus_selected_duration_seconds_;
+        focus_finished_counted_ = false;
+        TransitionFocusState(FocusUiState::Ready);
+        break;
+    case FocusUiState::Finished:
+        focus_remaining_seconds_ = focus_selected_duration_seconds_;
+        focus_active_duration_seconds_ = focus_selected_duration_seconds_;
+        focus_finished_counted_ = false;
+        TransitionFocusState(FocusUiState::Ready);
+        break;
+    case FocusUiState::Ready:
+    default:
+        RenderTodayFocusState(true);
+        break;
     }
 }
 
-void SmartGadgetDisplay::ResetFocusTimer() {
+void SmartGadgetDisplay::HandleTodayMainAction() {
     if (!setup_ui_called_) {
         return;
     }
 
     DisplayLockGuard lock(this);
-    focus_running_ = false;
-    focus_deadline_us_ = 0;
-    focus_remaining_seconds_ = kFocusDurationSeconds;
-
-    time_t now = time(nullptr);
-    struct tm timeinfo = {};
-    localtime_r(&now, &timeinfo);
-    if (timeinfo.tm_year >= (2025 - 1900)) {
-        ApplyTodayText(timeinfo);
+    switch (focus_state_) {
+    case FocusUiState::Ready:
+        focus_active_duration_seconds_ = focus_selected_duration_seconds_;
+        focus_remaining_seconds_ = focus_selected_duration_seconds_;
+        focus_finished_counted_ = false;
+        StartFocusCountdown(focus_selected_duration_seconds_, FocusUiState::Running);
+        RenderTodayFocusState(true);
+        break;
+    case FocusUiState::Running:
+        StopFocusCountdown();
+        focus_remaining_seconds_ = focus_selected_duration_seconds_;
+        focus_active_duration_seconds_ = focus_selected_duration_seconds_;
+        focus_finished_counted_ = false;
+        TransitionFocusState(FocusUiState::Ready);
+        break;
+    case FocusUiState::Paused:
+        StartFocusCountdown(focus_remaining_seconds_ > 0 ? focus_remaining_seconds_ : focus_selected_duration_seconds_,
+                            FocusUiState::Running);
+        RenderTodayFocusState(true);
+        break;
+    case FocusUiState::Finished:
+        focus_active_duration_seconds_ = focus_selected_duration_seconds_;
+        focus_remaining_seconds_ = focus_selected_duration_seconds_;
+        focus_finished_counted_ = false;
+        StartFocusCountdown(focus_selected_duration_seconds_, FocusUiState::Running);
+        RenderTodayFocusState(true);
+        break;
     }
+}
+
+void SmartGadgetDisplay::HandleTodayRightAction() {
+    if (!setup_ui_called_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+    switch (focus_state_) {
+    case FocusUiState::Running:
+        ExtendFocusTime(5 * 60);
+        RenderTodayFocusState(true);
+        break;
+    case FocusUiState::Paused:
+    case FocusUiState::Finished:
+        focus_remaining_seconds_ = focus_selected_duration_seconds_;
+        focus_active_duration_seconds_ = focus_selected_duration_seconds_;
+        focus_finished_counted_ = false;
+        TransitionFocusState(FocusUiState::Ready);
+        break;
+    case FocusUiState::Ready:
+    default:
+        SetFocusDuration(kFocusDurationSeconds);
+        break;
+    }
+}
+
+void SmartGadgetDisplay::ToggleFocusTimer() {
+    HandleTodayMainAction();
+}
+
+void SmartGadgetDisplay::ResetFocusTimer() {
+    HandleTodayRightAction();
 }
 
 void SmartGadgetDisplay::OnSquareLineScreenCreated(lv_obj_t* screen) {
@@ -783,14 +1127,9 @@ void SmartGadgetDisplay::OnSquareLineScreenCreated(lv_obj_t* screen) {
         time_t now = time(nullptr);
         struct tm timeinfo = {};
         localtime_r(&now, &timeinfo);
-        if (timeinfo.tm_year >= (2025 - 1900)) {
-            ApplyTodayText(timeinfo);
-        }
+        ApplyTodayText(timeinfo);
     } else if (screen == ui_Music_Player) {
         ConfigureScreenLifecycle(screen, kPageMusic);
-        music_pause_icon_ = nullptr;
-        music_title_label_ = ui_Music_Title;
-        music_artist_label_ = ui_Author;
         BindMusicButtons();
         ApplyMusicButtonState();
     } else if (screen == ui_Weather) {
@@ -815,12 +1154,17 @@ void SmartGadgetDisplay::SetupUI() {
 
     Display::SetupUI();
     DisplayLockGuard lock(this);
+    focus_task_text_ = "关键一步";
     ui_init();
     ApplyInitialText();
     ui_ready_ = true;
     current_page_ = kPageSplash;
     if (live_data_timer_ == nullptr) {
         live_data_timer_ = lv_timer_create(SmartGadgetDisplay::LiveDataTimerCallback, 3000, this);
+    }
+    if (focus_ui_timer_ == nullptr) {
+        focus_ui_timer_ = lv_timer_create(SmartGadgetDisplay::FocusUiTimerCallback, kFocusTimerPeriodMs, this);
+        lv_timer_pause(focus_ui_timer_);
     }
 }
 
@@ -839,9 +1183,7 @@ void SmartGadgetDisplay::UpdateCallStatus(const char* status) {
     time_t now = time(nullptr);
     struct tm timeinfo = {};
     localtime_r(&now, &timeinfo);
-    if (timeinfo.tm_year >= (2025 - 1900)) {
-        ApplyTodayText(timeinfo);
-    }
+    ApplyTodayText(timeinfo);
 }
 
 void SmartGadgetDisplay::EnsureSensorServiceStarted() {
@@ -945,6 +1287,12 @@ void SmartGadgetDisplay::ClearChatMessages() {
 
 void SmartGadgetDisplay::SetMusicPlaying(bool playing) {
     music_playing_ = playing;
+    if (playing) {
+        music_session_started_ = true;
+        music_ui_state_ = MusicUiState::Playing;
+    } else {
+        music_ui_state_ = music_session_started_ ? MusicUiState::Paused : MusicUiState::Idle;
+    }
     if (!setup_ui_called_) {
         return;
     }
@@ -959,12 +1307,29 @@ void SmartGadgetDisplay::SetMusicTrackInfo(const char* title, const char* artist
     }
 
     DisplayLockGuard lock(this);
+    const int inferred_index = InferMusicTrackIndex(title);
+    if (inferred_index >= 0) {
+        music_track_index_ = static_cast<uint32_t>(inferred_index);
+    }
     if (ui_Music_Title != nullptr) {
-        lv_label_set_text(ui_Music_Title, title != nullptr ? title : "");
+        lv_label_set_text(ui_Music_Title, "");
     }
     if (ui_Author != nullptr) {
-        lv_label_set_text(ui_Author, artist != nullptr ? artist : "");
+        lv_label_set_text(ui_Author, "");
     }
+    (void)artist;
+    ui_music_compact_set_track_index(music_track_index_, music_track_total_);
+}
+
+void SmartGadgetDisplay::SetMusicTrackIndex(uint32_t index, uint32_t total) {
+    music_track_index_ = index;
+    music_track_total_ = total == 0 ? 1 : total;
+    if (!setup_ui_called_) {
+        return;
+    }
+
+    DisplayLockGuard lock(this);
+    ui_music_compact_set_track_index(music_track_index_, music_track_total_);
 }
 
 void SmartGadgetDisplay::SetEmotion(const char* emotion) {
@@ -1014,9 +1379,7 @@ void SmartGadgetDisplay::LoadPage(PageIndex page) {
                 time_t now = time(nullptr);
                 struct tm timeinfo = {};
                 localtime_r(&now, &timeinfo);
-                if (timeinfo.tm_year >= (2025 - 1900)) {
-                    ApplyTodayText(timeinfo);
-                }
+                ApplyTodayText(timeinfo);
             }
             BindTodayButtons();
             lv_screen_load_anim(ui_Today, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, false);
@@ -1024,7 +1387,6 @@ void SmartGadgetDisplay::LoadPage(PageIndex page) {
         case kPageMusic:
             if (ui_Music_Player == nullptr) {
                 ui_Music_Player_screen_init();
-                music_pause_icon_ = nullptr;
             }
             BindMusicButtons();
             ApplyMusicButtonState();

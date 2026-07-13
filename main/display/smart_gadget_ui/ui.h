@@ -57,6 +57,29 @@ LV_IMG_DECLARE(ui_img_forward_png);    // assets/forward.png
 LV_IMG_DECLARE(ui_img_weather_1_png);    // assets/weather_1.png
 LV_IMG_DECLARE(ui_img_weather_2_png);    // assets/weather_2.png
 LV_IMG_DECLARE(ui_img_weather_3_png);    // assets/weather_3.png
+LV_IMG_DECLARE(ui_img_home_mascot);
+LV_IMG_DECLARE(ui_img_home_corner_leaf);
+LV_IMG_DECLARE(ui_img_home_calendar);
+LV_IMG_DECLARE(ui_img_home_temperature);
+LV_IMG_DECLARE(ui_img_home_humidity);
+LV_IMG_DECLARE(ui_img_home_center_leaf);
+LV_IMG_DECLARE(ui_img_focus_mascot_ready);
+LV_IMG_DECLARE(ui_img_focus_mascot_running);
+LV_IMG_DECLARE(ui_img_focus_mascot_paused);
+LV_IMG_DECLARE(ui_img_focus_mascot_finished);
+LV_IMG_DECLARE(ui_img_focus_corner_vine);
+LV_IMG_DECLARE(ui_img_focus_left_decor_ready);
+LV_IMG_DECLARE(ui_img_focus_left_decor_running);
+LV_IMG_DECLARE(ui_img_focus_left_decor_paused);
+LV_IMG_DECLARE(ui_img_focus_left_decor_finished);
+LV_IMG_DECLARE(ui_img_focus_back);
+LV_IMG_DECLARE(ui_img_focus_gear);
+LV_IMG_DECLARE(ui_img_focus_edit);
+LV_IMG_DECLARE(ui_img_focus_leaf);
+LV_IMG_DECLARE(ui_img_focus_medal);
+LV_IMG_DECLARE(ui_img_focus_pause);
+LV_IMG_DECLARE(ui_img_focus_stop);
+LV_IMG_DECLARE(ui_img_focus_cup);
 
 // FONTS
 LV_FONT_DECLARE(ui_font_Number);

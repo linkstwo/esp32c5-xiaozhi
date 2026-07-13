@@ -32,7 +32,7 @@ void ui_event_Alarm(lv_event_t * e)
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
         lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Clock, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Clock_screen_init);
+        _ui_screen_change(&ui_Device, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Device_screen_init);
     }
 }
 
@@ -97,31 +97,7 @@ void ui_Alarm_screen_init(void)
     lv_label_set_text(ui_comp_get_child(ui_Alarm_Comp3, UI_COMP_ALARM_COMP_PERIOD), "Sleep");
 
     ui_Scrolldots5 = ui_Scrolldots_create(ui_Alarm);
-    lv_obj_set_x(ui_Scrolldots5, 0);
-    lv_obj_set_y(ui_Scrolldots5, -8);
-
-    lv_obj_set_width(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D1), 4);
-    lv_obj_set_height(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D1), 4);
-
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D2), 10);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D2), 0);
-
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D3), 20);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D3), 0);
-
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D4), 30);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D4), 0);
-
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D5), 40);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D5), 0);
-
-    lv_obj_set_width(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D6), 8);
-    lv_obj_set_height(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D6), 8);
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D6), 50);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D6), 0);
-    lv_obj_set_style_bg_color(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D6), lv_color_hex(0x101C52),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_comp_get_child(ui_Scrolldots5, UI_COMP_SCROLLDOTS_D6), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_update_page_indicator(ui_Scrolldots5, 5, 7, 0x6E9B52, 0xD8CFB2);
 
     lv_obj_add_event_cb(ui_Alarm, ui_event_Alarm, LV_EVENT_ALL, NULL);
 

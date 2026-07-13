@@ -27,6 +27,29 @@ SET(SOURCES components/ui_comp_alarm_comp.c
     images/ui_img_weather_1_png.c
     images/ui_img_weather_2_png.c
     images/ui_img_weather_3_png.c
+    images/ui_img_home_mascot.c
+    images/ui_img_home_corner_leaf.c
+    images/ui_img_home_calendar.c
+    images/ui_img_home_temperature.c
+    images/ui_img_home_humidity.c
+    images/ui_img_home_center_leaf.c
+    images/ui_img_focus_mascot_ready.c
+    images/ui_img_focus_mascot_running.c
+    images/ui_img_focus_mascot_paused.c
+    images/ui_img_focus_mascot_finished.c
+    images/ui_img_focus_corner_vine.c
+    images/ui_img_focus_left_decor_ready.c
+    images/ui_img_focus_left_decor_running.c
+    images/ui_img_focus_left_decor_paused.c
+    images/ui_img_focus_left_decor_finished.c
+    images/ui_img_focus_back.c
+    images/ui_img_focus_gear.c
+    images/ui_img_focus_edit.c
+    images/ui_img_focus_leaf.c
+    images/ui_img_focus_medal.c
+    images/ui_img_focus_pause.c
+    images/ui_img_focus_stop.c
+    images/ui_img_focus_cup.c
     fonts/ui_font_Number.c)
 
 add_library(ui ${SOURCES})

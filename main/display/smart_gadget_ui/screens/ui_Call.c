@@ -29,11 +29,11 @@ void ui_event_Call(lv_event_t * e)
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
         lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Today, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Today_screen_init);
+        _ui_screen_change(&ui_Weather, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Weather_screen_init);
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
         lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Device, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Device_screen_init);
+        _ui_screen_change(&ui_Music_Player, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Music_Player_screen_init);
     }
 }
 
@@ -139,19 +139,7 @@ void ui_Call_screen_init(void)
     lv_obj_set_style_shadow_offset_y(ui_Avatar, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_Scrolldots1 = ui_Scrolldots_create(ui_Call);
-    lv_obj_set_x(ui_Scrolldots1, 0);
-    lv_obj_set_y(ui_Scrolldots1, -8);
-
-    lv_obj_set_width(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D1), 4);
-    lv_obj_set_height(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D1), 4);
-
-    lv_obj_set_width(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D2), 8);
-    lv_obj_set_height(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D2), 8);
-    lv_obj_set_x(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D2), 11);
-    lv_obj_set_y(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D2), 0);
-    lv_obj_set_style_bg_color(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D2), lv_color_hex(0x101C52),
-                              LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_comp_get_child(ui_Scrolldots1, UI_COMP_SCROLLDOTS_D2), 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    ui_update_page_indicator(ui_Scrolldots1, 3, 7, 0x6E9B52, 0xD8CFB2);
 
     lv_obj_add_event_cb(ui_Call, ui_event_Call, LV_EVENT_ALL, NULL);
 

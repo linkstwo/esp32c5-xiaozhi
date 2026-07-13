@@ -23,6 +23,14 @@ extern lv_obj_t * ui_Album;
 extern lv_obj_t * ui_Backward;
 extern lv_obj_t * ui_Forward;
 extern lv_obj_t * ui_Scrolldots3;
+extern lv_obj_t * ui_Music_Header;
+extern lv_obj_t * ui_Music_PageIndex;
+extern lv_obj_t * ui_Music_Volume;
+extern lv_obj_t * ui_Music_PlayText;
+
+void ui_music_compact_set_state(uint8_t state);
+void ui_music_compact_set_track_index(uint32_t index, uint32_t total);
+void ui_music_compact_set_volume(uint32_t percent);
 // CUSTOM VARIABLES
 
 #ifdef __cplusplus
@@ -30,4 +38,3 @@ extern lv_obj_t * ui_Scrolldots3;
 #endif
 
 #endif
-

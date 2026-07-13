@@ -19,6 +19,7 @@ public:
     void SetChatMessage(const char* role, const char* content) override;
     void ClearChatMessages() override;
     void SetMusicTrackInfo(const char* title, const char* artist) override;
+    void SetMusicTrackIndex(uint32_t index, uint32_t total) override;
     void SetMusicPlaying(bool playing) override;
     void SetEmotion(const char* emotion) override;
     void SetTheme(Theme* theme) override;
@@ -26,16 +27,34 @@ public:
     void ShowCallPage();
     lv_display_t* GetLvglDisplay() const { return display_; }
     void OnSquareLineScreenCreated(lv_obj_t* screen);
+    void HandleTodayLeftAction();
+    void HandleTodayMainAction();
+    void HandleTodayRightAction();
     void ToggleFocusTimer();
     void ResetFocusTimer();
+    void SetFocusDuration(int32_t duration_seconds);
+
+public:
+    enum class MusicUiState : uint8_t {
+        Idle = 0,
+        Playing,
+        Paused,
+    };
+
+    enum class FocusUiState : uint8_t {
+        Ready = 0,
+        Running,
+        Paused,
+        Finished,
+    };
 
 private:
     enum PageIndex {
         kPageSplash = 0,
         kPageClock,
-        kPageCall,
         kPageToday,
         kPageMusic,
+        kPageCall,
         kPageWeather,
         kPageAlarm,
         kPageDevice,
@@ -48,16 +67,26 @@ private:
     bool music_buttons_bound_ = false;
     bool today_buttons_bound_ = false;
     bool music_playing_ = false;
-    bool focus_running_ = false;
-    lv_obj_t* music_pause_icon_ = nullptr;
-    lv_obj_t* music_title_label_ = nullptr;
-    lv_obj_t* music_artist_label_ = nullptr;
+    bool music_session_started_ = false;
+    MusicUiState music_ui_state_ = MusicUiState::Idle;
+    uint32_t music_track_index_ = 0;
+    uint32_t music_track_total_ = 2;
+    uint32_t music_volume_percent_ = 80;
     lv_timer_t* live_data_timer_ = nullptr;
+    lv_timer_t* focus_ui_timer_ = nullptr;
+    FocusUiState focus_state_ = FocusUiState::Ready;
+    FocusUiState focus_rendered_state_ = FocusUiState::Ready;
+    int32_t focus_selected_duration_seconds_ = 25 * 60;
+    int32_t focus_active_duration_seconds_ = 25 * 60;
     int32_t focus_remaining_seconds_ = 25 * 60;
     int64_t focus_deadline_us_ = 0;
+    int32_t focus_completed_sessions_today_ = 0;
+    int32_t focus_last_arc_value_ = -1;
+    bool focus_finished_counted_ = false;
     std::string call_status_ = "Preparing...";
     std::string user_message_;
     std::string assistant_message_;
+    std::string focus_task_text_ = "完成最重要的一小步";
 
     void ApplyInitialText();
     void ApplyCallText();
@@ -68,12 +97,23 @@ private:
     void ApplyClockText(const struct tm& timeinfo);
     void ApplyReadableFont(lv_obj_t* obj);
     void ApplyTodayFont(lv_obj_t* obj);
+    void ApplyIconFont(lv_obj_t* obj);
     void BindCallButtons();
     void BindMusicButtons();
     void BindTodayButtons();
     void RefreshLiveData();
     void UpdateFocusCountdown(int64_t now_us);
+    void StartFocusCountdown(int32_t duration_seconds, FocusUiState running_state);
+    void StopFocusCountdown();
+    void ExtendFocusTime(int32_t extra_seconds);
+    void TransitionFocusState(FocusUiState next_state);
+    void UpdateFocusActionButtons(FocusUiState state);
+    void UpdateFocusPalette(FocusUiState state);
+    void UpdateFocusMascot(FocusUiState state, bool animate);
+    void UpdateFocusArc(int32_t arc_value, bool animate);
+    void RenderTodayFocusState(bool animate);
     static void LiveDataTimerCallback(lv_timer_t* timer);
+    static void FocusUiTimerCallback(lv_timer_t* timer);
     void UpdateCallStatus(const char* status);
     void LoadPage(PageIndex page);
     void EnsureSensorServiceStarted();

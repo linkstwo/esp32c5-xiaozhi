@@ -53,6 +53,10 @@ void Display::SetMusicTrackInfo(const char* title, const char* artist) {
     ESP_LOGW(TAG, "SetMusicTrackInfo: %s / %s", title ? title : "", artist ? artist : "");
 }
 
+void Display::SetMusicTrackIndex(uint32_t index, uint32_t total) {
+    ESP_LOGW(TAG, "SetMusicTrackIndex: %u/%u", static_cast<unsigned>(index), static_cast<unsigned>(total));
+}
+
 void Display::SetMusicPlaying(bool playing) {
     ESP_LOGW(TAG, "SetMusicPlaying: %d", playing);
 }

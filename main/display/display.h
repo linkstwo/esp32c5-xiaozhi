@@ -12,6 +12,7 @@
 #include <esp_log.h>
 #include <esp_pm.h>
 
+#include <cstdint>
 #include <string>
 #include <chrono>
 
@@ -37,6 +38,7 @@ public:
     virtual void SetChatMessage(const char* role, const char* content);
     virtual void ClearChatMessages();
     virtual void SetMusicTrackInfo(const char* title, const char* artist);
+    virtual void SetMusicTrackIndex(uint32_t index, uint32_t total);
     virtual void SetMusicPlaying(bool playing);
     virtual void SetTheme(Theme* theme);
     virtual Theme* GetTheme() { return current_theme_; }
