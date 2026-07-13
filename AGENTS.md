@@ -27,7 +27,7 @@ These rules apply to every task in this repository. The priority is to finish th
 - Do not add a new Chinese font just to change one or two labels. Reuse the existing Chinese font or adjust layout/zoom/spacing.
 - Do not add new image assets when an existing asset or LVGL primitive can achieve the result.
 - After adding fonts, images, or large generated C arrays, check binary/partition impact. Avoid changes that leave an unsafe application-partition margin.
-- Prefer integer math and lightweight LVGL timers/animations over floating-point work in frequently executed UI callbacks.
+- Prefer lightweight LVGL timers/animations and bounded computation in frequently executed UI callbacks.
 - Ensure timers and animations are created once, paused/resumed correctly, and deleted when their owning screen is destroyed. Avoid duplicate callbacks and dangling object references.
 
 ## UI implementation rules
@@ -45,6 +45,35 @@ These rules apply to every task in this repository. The priority is to finish th
 - When simulation is unavailable, perform static verification and state explicitly what remains unverified.
 - Before finishing, review the diff for accidental generated files, new fonts/assets, duplicate timers, hard-coded fake values, and unrelated edits.
 
-## Current project-specific lesson
+## Current task: replace the bad waveform animation
 
-The music page waveform and spectrum bars are separate elements. Animating only the bars does not satisfy a request for a moving waveform. For music-page work, inspect both `ui_Music_WaveLine`/`ui_Music_WaveGlow` and the bar animations, including pause, unload, reload, and resume behavior.
+The music page waveform must be a smooth horizontally travelling sine wave, not a set of independently wobbling points.
+
+Implementation requirements:
+
+- Work only in the music UI files unless a small interface change is strictly required.
+- Use one coherent travelling-wave equation for every sample point, conceptually `y(x,t) = baseline + A1*sin(k1*x - phase) + A2*sin(k2*x - phase*ratio + offset)`.
+- Advance one shared phase every frame so the entire curve visibly travels from one side to the other. The body of the curve must move; do not merely alter several point heights in place.
+- Use at least 31 sample points across the visible waveform width. The current 13 widely spaced points are insufficient for a smooth curve.
+- Keep X positions evenly spaced and stable. Only Y is recomputed from the shared phase.
+- Use a sine lookup table or `sinf()` if measured cost is acceptable. Do not replace sine with a crude triangle wave, independent random values, or per-point oscillators.
+- Target about 30 FPS with a timer period around 33 ms. If the device cannot sustain it, use 40 ms, but do not drop to a visibly jerky rate without evidence.
+- Use a stable baseline and a restrained amplitude so the line does not jump, fold, or collide with nearby UI elements. Start around 8-12 px primary amplitude plus a 2-4 px secondary harmonic.
+- Update both `ui_Music_WaveLine` and `ui_Music_WaveGlow` from the same point buffer so they remain perfectly aligned.
+- Playing: phase advances continuously and smoothly.
+- Paused: amplitude eases down over several frames to a subtle breathing wave or near-flat line; do not freeze abruptly in a random shape.
+- Idle: use a calm low-amplitude travelling wave or a stable designed curve, consistently chosen.
+- On screen unload, pause the timer. On screen load, restore animation according to the saved music state. Do not create duplicate timers.
+- On screen destroy, delete the timer and clear its pointer.
+- Keep the existing spectrum bars, but the moving line is a separate required animation and must remain visibly smooth even if the bars are hidden.
+- Do not add fonts, images, simulator dependencies, or unrelated UI changes.
+
+Acceptance checks:
+
+1. In a screen recording, a crest must travel horizontally across the waveform region instead of individual vertices bobbing vertically.
+2. The line must look continuous at normal viewing distance, with no obvious polygonal point-to-point snapping.
+3. Glow and main line must remain coincident throughout motion.
+4. Pause, resume, leave page, and return page must preserve the correct animation state.
+5. Report the timer period, sample count, wave formula/LUT choice, and measured or estimated per-frame cost concisely.
+
+The music page waveform and spectrum bars are separate elements. Animating only the bars does not satisfy the task.
