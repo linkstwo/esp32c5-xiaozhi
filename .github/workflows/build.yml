@@ -98,12 +98,29 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build current variant
+        id: product_build
         shell: bash
         run: |
           source $IDF_PATH/export.sh
-          python scripts/release.py ${{ matrix.board }} --name ${{ matrix.name }}
+          set +e
+          python scripts/release.py ${{ matrix.board }} --name ${{ matrix.name }} > build.log 2>&1
+          BUILD_STATUS=$?
+          set -e
+          if [[ "$BUILD_STATUS" -ne 0 ]]; then
+            echo "Build failed. The complete output is attached as build_log."
+            exit "$BUILD_STATUS"
+          fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build_log_${{ matrix.full_name }}_${{ github.sha }}
+          path: build.log
+          if-no-files-found: error
 
       - name: Upload artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: xiaozhi_${{ matrix.full_name }}_${{ github.sha }}
