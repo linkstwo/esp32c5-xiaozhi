@@ -59,6 +59,9 @@ extern lv_obj_t * ui_Today_center_icon;
 void ui_Today_screen_init(void);
 void ui_Today_screen_destroy(void);
 void ui_event_Today(lv_event_t * e);
+void ui_Today_set_focus_visual_state(uint8_t state);
+void ui_Today_set_focus_orbit_value(int32_t value);
+void ui_Today_refresh_focus_button_layout(void);
 
 #ifdef __cplusplus
 } /*extern "C"*/

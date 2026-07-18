@@ -26,14 +26,6 @@ void ui_event_Alarm(lv_event_t * e)
         upanim_Animation(ui_Alarm_Comp3, 500);
         scrolldot_Animation(ui_Scrolldots5, 0);
     }
-    if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
-        lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Weather, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Weather_screen_init);
-    }
-    if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
-        lv_indev_wait_release(lv_indev_active());
-        _ui_screen_change(&ui_Device, LV_SCR_LOAD_ANIM_FADE_ON, 0, 0, &ui_Device_screen_init);
-    }
 }
 
 // build funtions

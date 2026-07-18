@@ -72,6 +72,32 @@ private:
     lv_indev_t* touch_indev_ = nullptr;
     Display* display_ = nullptr;
     Button boot_button_;
+    lv_point_t touch_start_point_ = {};
+    bool touch_tracking_ = false;
+
+    static void TouchInputEventCallback(lv_event_t* event)
+    {
+        auto* board = static_cast<EspSensairShuttle*>(lv_event_get_user_data(event));
+        if (board == nullptr || board->touch_indev_ == nullptr) {
+            return;
+        }
+
+        lv_point_t point;
+        lv_indev_get_point(board->touch_indev_, &point);
+        const lv_event_code_t code = lv_event_get_code(event);
+        if (code == LV_EVENT_PRESSED) {
+            board->touch_start_point_ = point;
+            board->touch_tracking_ = true;
+        } else if (code == LV_EVENT_RELEASED && board->touch_tracking_) {
+            board->touch_tracking_ = false;
+            auto* smart_display = dynamic_cast<SmartGadgetDisplay*>(board->display_);
+            if (smart_display != nullptr) {
+                smart_display->HandleTouchSwipe(
+                    point.x - board->touch_start_point_.x,
+                    point.y - board->touch_start_point_.y);
+            }
+        }
+    }
 
     void InitializeI2c()
     {
@@ -189,6 +215,11 @@ private:
             ESP_LOGE(TAG, "Failed to register CST816S touch with LVGL");
             return;
         }
+
+        lv_indev_add_event_cb(touch_indev_, TouchInputEventCallback,
+                              LV_EVENT_PRESSED, this);
+        lv_indev_add_event_cb(touch_indev_, TouchInputEventCallback,
+                              LV_EVENT_RELEASED, this);
 
         ESP_LOGI(TAG, "CST816S touch registered as LVGL input device");
     }

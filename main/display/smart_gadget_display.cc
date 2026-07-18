@@ -21,6 +21,7 @@
 LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
 LV_FONT_DECLARE(BUILTIN_ICON_FONT);
 LV_FONT_DECLARE(font_puhui_16_4);
+LV_FONT_DECLARE(ui_font_FocusDigits);
 
 SmartGadgetDisplay* g_smart_gadget_display = nullptr;
 
@@ -74,7 +75,7 @@ const char* GetWeekdayText(int wday) {
 }
 
 constexpr int kFocusTimerPeriodMs = 250;
-constexpr int kFocusArcMaxValue = 1000;
+constexpr int kFocusArcMaxValue = FOCUS_ARC_PROGRESS_MAX_VALUE;
 
 struct FocusPalette {
     uint32_t bg;
@@ -111,25 +112,25 @@ FocusPalette GetFocusPalette(SmartGadgetDisplay::FocusUiState state) {
     switch (state) {
     case SmartGadgetDisplay::FocusUiState::Running:
         return {FOCUS_COLOR_RUNNING_BG, FOCUS_COLOR_RUNNING_ACCENT,
-                FOCUS_COLOR_RUNNING_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_RUNNING_ACCENT,
-                FOCUS_COLOR_RUNNING_PRIMARY, FOCUS_COLOR_TEXT_MAIN, FOCUS_COLOR_PANEL_BORDER,
-                FOCUS_COLOR_RUNNING_SECONDARY, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_RUNNING_ACCENT};
+                FOCUS_COLOR_RUNNING_LEFT, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN,
+                FOCUS_COLOR_RUNNING_PRIMARY, FOCUS_COLOR_BROWN_TEXT, FOCUS_COLOR_CORAL_TOMATO,
+                FOCUS_COLOR_RUNNING_SECONDARY, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN};
     case SmartGadgetDisplay::FocusUiState::Paused:
         return {FOCUS_COLOR_PAUSED_BG, FOCUS_COLOR_PAUSED_ACCENT,
-                FOCUS_COLOR_PAUSED_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_RUNNING_ACCENT,
-                FOCUS_COLOR_PAUSED_PRIMARY, 0xFFFFFF, FOCUS_COLOR_PAUSED_ACCENT,
-                FOCUS_COLOR_PAUSED_SECONDARY, FOCUS_COLOR_TEXT_MAIN, FOCUS_COLOR_PAUSED_ACCENT};
+                FOCUS_COLOR_PAUSED_LEFT, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN,
+                FOCUS_COLOR_PAUSED_PRIMARY, FOCUS_COLOR_BROWN_TEXT, FOCUS_COLOR_CORAL_TOMATO,
+                FOCUS_COLOR_PAUSED_SECONDARY, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN};
     case SmartGadgetDisplay::FocusUiState::Finished:
         return {FOCUS_COLOR_FINISHED_BG, FOCUS_COLOR_FINISHED_ACCENT,
-                FOCUS_COLOR_FINISHED_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_FINISHED_ACCENT,
-                FOCUS_COLOR_FINISHED_PRIMARY, 0xFFFFFF, FOCUS_COLOR_FINISHED_ACCENT,
-                FOCUS_COLOR_FINISHED_SECONDARY, FOCUS_COLOR_TEXT_MAIN, FOCUS_COLOR_FINISHED_ACCENT};
+                FOCUS_COLOR_FINISHED_LEFT, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN,
+                FOCUS_COLOR_FINISHED_PRIMARY, FOCUS_COLOR_BROWN_TEXT, FOCUS_COLOR_CORAL_TOMATO,
+                FOCUS_COLOR_FINISHED_SECONDARY, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN};
     case SmartGadgetDisplay::FocusUiState::Ready:
     default:
         return {FOCUS_COLOR_READY_BG, FOCUS_COLOR_READY_ACCENT,
-                FOCUS_COLOR_READY_LEFT, FOCUS_COLOR_TEXT_GREEN, FOCUS_COLOR_READY_ACCENT,
-                FOCUS_COLOR_READY_PRIMARY, 0xFFFFFF, FOCUS_COLOR_READY_ACCENT,
-                FOCUS_COLOR_READY_SECONDARY, FOCUS_COLOR_PAUSED_ACCENT, FOCUS_COLOR_PAUSED_ACCENT};
+                FOCUS_COLOR_READY_LEFT, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN,
+                FOCUS_COLOR_READY_PRIMARY, FOCUS_COLOR_BROWN_TEXT, FOCUS_COLOR_CORAL_TOMATO,
+                FOCUS_COLOR_READY_SECONDARY, FOCUS_COLOR_DEEP_GREEN, FOCUS_COLOR_LEAF_GREEN};
     }
 }
 
@@ -147,14 +148,14 @@ struct FocusButtonSet {
 FocusButtonSet GetFocusButtons(SmartGadgetDisplay::FocusUiState state) {
     switch (state) {
     case SmartGadgetDisplay::FocusUiState::Running:
-        return {{FONT_AWESOME_PAUSE, "暂停"}, {FONT_AWESOME_STOP, "结束"}, {"+", "5分"}};
+        return {{FONT_AWESOME_PAUSE, "暂停"}, {FONT_AWESOME_STOP, "结束"}, {"+", "+5分"}};
     case SmartGadgetDisplay::FocusUiState::Paused:
         return {{FONT_AWESOME_ARROWS_ROTATE, "重置"}, {FONT_AWESOME_PLAY, "继续"}, {FONT_AWESOME_STOP, "结束"}};
     case SmartGadgetDisplay::FocusUiState::Finished:
-        return {{FONT_AWESOME_CIRCLE_CHECK, "休息"}, {FONT_AWESOME_PLAY, "再来一轮"}, {FONT_AWESOME_STOP, "结束"}};
+        return {{FONT_AWESOME_CIRCLE_CHECK, "休息"}, {nullptr, "再来一轮"}, {FONT_AWESOME_STOP, "结束"}};
     case SmartGadgetDisplay::FocusUiState::Ready:
     default:
-        return {{FONT_AWESOME_CLOCK, "专注"}, {FONT_AWESOME_PLAY, "开始"}, {FONT_AWESOME_ARROWS_ROTATE, "重置"}};
+        return {{nullptr, "专注"}, {FONT_AWESOME_PLAY, "开始"}, {FONT_AWESOME_ARROWS_ROTATE, "重置"}};
     }
 }
 
@@ -224,6 +225,7 @@ void AnimateArcValue(lv_obj_t* arc, int32_t value) {
     lv_anim_set_duration(&anim, 260);
     lv_anim_set_exec_cb(&anim, [](void* var, int32_t v) {
         lv_arc_set_value(static_cast<lv_obj_t*>(var), v);
+        ui_Today_set_focus_orbit_value(v);
     });
     lv_anim_start(&anim);
 }
@@ -302,9 +304,10 @@ void SmartGadgetDisplay::ApplyMusicButtonState() {
         music_ui_state_ = music_session_started_ ? MusicUiState::Paused : MusicUiState::Idle;
     }
 
-    ui_music_compact_set_state(static_cast<uint8_t>(music_ui_state_));
+    ui_music_set_playback_state(static_cast<ui_music_state_t>(music_ui_state_));
     ui_music_compact_set_track_index(music_track_index_, music_track_total_);
     ui_music_compact_set_volume(music_volume_percent_);
+    ui_music_compact_set_track_info(music_title_.c_str(), music_artist_.c_str());
 }
 
 void SmartGadgetDisplay::ApplyWeatherText() {
@@ -368,7 +371,7 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
     if (ui_Clock_Number != nullptr) {
         char time_text[16];
         strftime(time_text, sizeof(time_text), "%H:%M", &timeinfo);
-        lv_label_set_text(ui_Clock_Number, time_text);
+        ui_Clock_set_time_text(time_text, true);
         if (ui_Clock_NumberShadow != nullptr) {
             lv_label_set_text(ui_Clock_NumberShadow, time_text);
         }
@@ -376,7 +379,7 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
 
     if (ui_Clock_Date != nullptr) {
         char date_text[32];
-        snprintf(date_text, sizeof(date_text), "%02d-%02d %s",
+        snprintf(date_text, sizeof(date_text), "%02d·%02d %s",
                  timeinfo.tm_mon + 1, timeinfo.tm_mday, GetWeekdayText(timeinfo.tm_wday));
         ApplyTodayFont(ui_Clock_Date);
         lv_label_set_text(ui_Clock_Date, date_text);
@@ -393,8 +396,8 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
 
         if (!has_sensor_data) {
             snprintf(status_text, sizeof(status_text), "等待传感器");
-            snprintf(temp_text, sizeof(temp_text), "温 --°C");
-            snprintf(humidity_text, sizeof(humidity_text), "湿 --%%");
+            snprintf(temp_text, sizeof(temp_text), "--°C");
+            snprintf(humidity_text, sizeof(humidity_text), "--%%");
         } else {
             if (sensor_data.temperature >= 30.0f) {
                 snprintf(status_text, sizeof(status_text), "环境偏热");
@@ -407,8 +410,8 @@ void SmartGadgetDisplay::ApplyClockText(const struct tm& timeinfo) {
             } else {
                 snprintf(status_text, sizeof(status_text), "状态稳定");
             }
-            snprintf(temp_text, sizeof(temp_text), "温 %.0f°C", sensor_data.temperature);
-            snprintf(humidity_text, sizeof(humidity_text), "湿 %.0f%%", sensor_data.humidity);
+            snprintf(temp_text, sizeof(temp_text), "%.0f°C", sensor_data.temperature);
+            snprintf(humidity_text, sizeof(humidity_text), "%.0f%%", sensor_data.humidity);
         }
 
         if (ui_Clock_Status != nullptr) {
@@ -655,17 +658,23 @@ void SmartGadgetDisplay::UpdateFocusPalette(FocusUiState state) {
         lv_obj_set_style_text_color(ui_Today_focus_time, lv_color_hex(FOCUS_COLOR_TEXT_MAIN), LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     if (ui_Today_focus_unit != nullptr) {
-        lv_obj_set_style_text_color(ui_Today_focus_unit, lv_color_hex(FOCUS_COLOR_TEXT_MAIN), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_Today_focus_unit, lv_color_hex(palette.accent), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_status != nullptr) {
+        lv_obj_set_style_text_color(ui_Today_status, lv_color_hex(FOCUS_COLOR_DEEP_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (ui_Today_status_detail != nullptr) {
+        lv_obj_set_style_text_color(ui_Today_status_detail, lv_color_hex(FOCUS_COLOR_BROWN_TEXT), LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     if (ui_Today_focus_hint != nullptr) {
         lv_obj_set_style_text_color(ui_Today_focus_hint, lv_color_hex(FOCUS_COLOR_TEXT_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     if (ui_Today_timer_arc != nullptr) {
         lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_TRACK), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(palette.accent), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_CORAL_TOMATO), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     }
     if (ui_Today_focus_panel != nullptr) {
-        lv_obj_set_style_border_color(ui_Today_focus_panel, lv_color_hex(palette.accent), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_color(ui_Today_focus_panel, lv_color_hex(FOCUS_COLOR_CREAM_TRACK), LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     if (ui_Today_duration_left != nullptr) {
         lv_obj_set_style_bg_color(ui_Today_duration_left, lv_color_hex(palette.left_bg), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -729,6 +738,7 @@ void SmartGadgetDisplay::UpdateFocusArc(int32_t arc_value, bool animate) {
     } else {
         lv_arc_set_value(ui_Today_timer_arc, arc_value);
     }
+    ui_Today_set_focus_orbit_value(arc_value);
     focus_last_arc_value_ = arc_value;
 }
 
@@ -738,18 +748,23 @@ void SmartGadgetDisplay::RenderTodayFocusState(bool animate) {
     }
 
     char focus_time_text[24];
+    char focus_session_text[16];
     const int32_t total_seconds = focus_active_duration_seconds_ > 0 ? focus_active_duration_seconds_ : kFocusDurationSeconds;
-    int32_t arc_value = kFocusArcMaxValue;
-    int32_t time_zoom = 148;
-    int32_t time_y = 50;
-    int32_t unit_y = 90;
+    int32_t arc_value = 0;
+    int32_t time_zoom = FOCUS_TIMER_ZOOM;
+    int32_t time_y = FOCUS_TIMER_Y;
+    int32_t unit_y = 83;
     int32_t hint_y = 19;
     bool show_unit = false;
     bool show_hint = false;
-    const lv_font_t* time_font = &ui_font_Number;
+    const char* unit_text = "专注时光";
+    const char* focus_status_text = "准备中";
+    const lv_font_t* time_font = &ui_font_FocusDigits;
 
     UpdateFocusPalette(focus_state_);
     UpdateFocusActionButtons(focus_state_);
+    ui_Today_set_focus_visual_state(static_cast<uint8_t>(focus_state_));
+    ui_Today_refresh_focus_button_layout();
     UpdateFocusMascot(focus_state_, animate);
 
     switch (focus_state_) {
@@ -757,33 +772,50 @@ void SmartGadgetDisplay::RenderTodayFocusState(bool animate) {
         snprintf(focus_time_text, sizeof(focus_time_text), "%02d:%02d",
                  static_cast<int>(focus_remaining_seconds_ / 60),
                  static_cast<int>(focus_remaining_seconds_ % 60));
-        arc_value = total_seconds > 0 ? (focus_remaining_seconds_ * kFocusArcMaxValue) / total_seconds : 0;
-        time_zoom = 144;
-        time_y = 52;
+        focus_status_text = "专注中";
+        arc_value = total_seconds > 0
+            ? (focus_remaining_seconds_ * kFocusArcMaxValue) / total_seconds
+            : 0;
+        unit_text = "专注中";
         break;
     case FocusUiState::Paused:
         snprintf(focus_time_text, sizeof(focus_time_text), "%02d:%02d",
                  static_cast<int>(focus_remaining_seconds_ / 60),
                  static_cast<int>(focus_remaining_seconds_ % 60));
-        arc_value = total_seconds > 0 ? (focus_remaining_seconds_ * kFocusArcMaxValue) / total_seconds : 0;
-        time_zoom = 144;
-        time_y = 52;
+        focus_status_text = "已暂停";
+        arc_value = total_seconds > 0
+            ? (focus_remaining_seconds_ * kFocusArcMaxValue) / total_seconds
+            : 0;
+        unit_text = "已暂停";
         break;
     case FocusUiState::Finished:
         snprintf(focus_time_text, sizeof(focus_time_text), "%s", "完成");
+        focus_status_text = "已完成";
         arc_value = kFocusArcMaxValue;
         show_unit = false;
         show_hint = true;
-        time_font = &font_puhui_16_4;
-        time_zoom = 220;
-        time_y = 58;
+        time_font = &ui_font_FocusDigits;
+        time_zoom = FOCUS_TIMER_ZOOM;
+        time_y = FOCUS_TIMER_Y;
         break;
     case FocusUiState::Ready:
     default:
         snprintf(focus_time_text, sizeof(focus_time_text), "%02ld:%02d",
                  static_cast<long>(focus_selected_duration_seconds_ / 60), 0);
+        focus_status_text = "准备中";
         arc_value = kFocusArcMaxValue;
         break;
+    }
+
+    const int32_t completed_sessions = focus_completed_sessions_today_ > 4
+        ? 4 : focus_completed_sessions_today_;
+    snprintf(focus_session_text, sizeof(focus_session_text), "%ld/4",
+             static_cast<long>(completed_sessions));
+    if (ui_Today_status != nullptr) {
+        lv_label_set_text(ui_Today_status, focus_status_text);
+    }
+    if (ui_Today_status_detail != nullptr) {
+        lv_label_set_text(ui_Today_status_detail, focus_session_text);
     }
 
     if (ui_Today_focus_time != nullptr) {
@@ -795,7 +827,7 @@ void SmartGadgetDisplay::RenderTodayFocusState(bool animate) {
     if (ui_Today_focus_unit != nullptr) {
         ApplyTodayFont(ui_Today_focus_unit);
         lv_obj_set_y(ui_Today_focus_unit, unit_y);
-        lv_label_set_text(ui_Today_focus_unit, "分钟");
+        lv_label_set_text(ui_Today_focus_unit, unit_text);
         if (show_unit) {
             lv_obj_clear_flag(ui_Today_focus_unit, LV_OBJ_FLAG_HIDDEN);
         } else {
@@ -1302,22 +1334,19 @@ void SmartGadgetDisplay::SetMusicPlaying(bool playing) {
 }
 
 void SmartGadgetDisplay::SetMusicTrackInfo(const char* title, const char* artist) {
+    music_title_ = title != nullptr && title[0] != '\0' ? title : "正在加载";
+    music_artist_ = artist != nullptr && artist[0] != '\0' ? artist : "本地音乐";
+
+    const int inferred_index = InferMusicTrackIndex(title);
+    if (inferred_index >= 0) {
+        music_track_index_ = static_cast<uint32_t>(inferred_index);
+    }
     if (!setup_ui_called_) {
         return;
     }
 
     DisplayLockGuard lock(this);
-    const int inferred_index = InferMusicTrackIndex(title);
-    if (inferred_index >= 0) {
-        music_track_index_ = static_cast<uint32_t>(inferred_index);
-    }
-    if (ui_Music_Title != nullptr) {
-        lv_label_set_text(ui_Music_Title, "");
-    }
-    if (ui_Author != nullptr) {
-        lv_label_set_text(ui_Author, "");
-    }
-    (void)artist;
+    ui_music_compact_set_track_info(music_title_.c_str(), music_artist_.c_str());
     ui_music_compact_set_track_index(music_track_index_, music_track_total_);
 }
 
@@ -1346,6 +1375,31 @@ void SmartGadgetDisplay::ShowCallPage() {
     }
     DisplayLockGuard lock(this);
     LoadPage(kPageCall);
+}
+
+void SmartGadgetDisplay::HandleTouchSwipe(int32_t delta_x, int32_t delta_y) {
+    const int32_t abs_x = delta_x < 0 ? -delta_x : delta_x;
+    const int32_t abs_y = delta_y < 0 ? -delta_y : delta_y;
+    constexpr int32_t kSwipeThreshold = 30;
+
+    /* Page navigation is intentionally horizontal.  Ignore vertical drags
+     * instead of letting them accidentally activate a page or a button. */
+    if (abs_x < kSwipeThreshold || abs_x <= abs_y) {
+        return;
+    }
+
+    const int page = current_page_.load();
+    if (page < kPageClock || page >= kPageCount) {
+        return;
+    }
+
+    int next_page = page + (delta_x < 0 ? 1 : -1);
+    if (next_page < kPageClock) {
+        next_page = kPageDevice;
+    } else if (next_page > kPageDevice) {
+        next_page = kPageClock;
+    }
+    LoadPage(static_cast<PageIndex>(next_page));
 }
 
 void SmartGadgetDisplay::LoadPage(PageIndex page) {

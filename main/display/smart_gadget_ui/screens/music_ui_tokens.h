@@ -1,51 +1,67 @@
 #pragma once
 
+// music_ui_assets_v3_284x240/layout.json. All PNGs are native display size.
 #define MUSIC_SCREEN_W 284
 #define MUSIC_SCREEN_H 240
 
-#define MUSIC_COLOR_BG_TOP         0xF7F2DF
-#define MUSIC_COLOR_BG_BOTTOM      0xF5EFD8
-#define MUSIC_COLOR_BG_WARM        0xF3ECD3
-#define MUSIC_COLOR_CIRCLE_SOFT    0xF0D98B
-#define MUSIC_COLOR_CIRCLE_MINT    0xE5ECCD
-#define MUSIC_COLOR_TEXT           0x6C8440
-#define MUSIC_COLOR_TEXT_SOFT      0x78914B
-#define MUSIC_COLOR_ACCENT         0x8EA65C
-#define MUSIC_COLOR_ACCENT_DARK    0x7F9552
-#define MUSIC_COLOR_BORDER         0xB9BE8B
-#define MUSIC_COLOR_GOLD           0xE8C764
-#define MUSIC_COLOR_GOLD_SOFT      0xF0D98B
-#define MUSIC_COLOR_WAVE_LIGHT     0xD8D99A
-#define MUSIC_COLOR_DOT_IDLE       0xE7DCC1
-#define MUSIC_COLOR_SIDE_BUTTON    0xFAF2DF
+#define MUSIC_HEADER_LEAF_X 12
+#define MUSIC_HEADER_LEAF_Y 7
+#define MUSIC_HEADER_TITLE_X 35
+#define MUSIC_HEADER_TITLE_Y 3
+#define MUSIC_HEADER_META_X 87
+#define MUSIC_HEADER_META_Y 11
 
-#define MUSIC_HEADER_Y             8
+#define MUSIC_STATUS_X 202
+#define MUSIC_STATUS_Y 7
+#define MUSIC_STATUS_ICON_X 208
+#define MUSIC_STATUS_ICON_Y 11
+#define MUSIC_STATUS_TEXT_X 225
+#define MUSIC_STATUS_TEXT_Y 9
 
-#define MUSIC_WAVE_X               18
-#define MUSIC_WAVE_Y               55
-#define MUSIC_WAVE_W               120
-#define MUSIC_WAVE_H               90
-#define MUSIC_WAVE_BASELINE_Y      145
+#define MUSIC_ALBUM_X 8
+#define MUSIC_ALBUM_Y 42
+#define MUSIC_ALBUM_W 124
+#define MUSIC_ALBUM_H 123
+#define MUSIC_ALBUM_FADE_X 92
 
-#define MUSIC_MASCOT_X             169
-#define MUSIC_MASCOT_Y             38
+#define MUSIC_TITLE_X 149
+#define MUSIC_TITLE_Y 54
+#define MUSIC_TITLE_W 126
+#define MUSIC_TITLE_H 23
+#define MUSIC_ARTIST_X 150
+#define MUSIC_ARTIST_Y 83
+#define MUSIC_ARTIST_W 120
+#define MUSIC_ARTIST_H 15
+#define MUSIC_LYRICS_X 150
+#define MUSIC_LYRICS_Y 107
+#define MUSIC_LYRICS_W 126
+#define MUSIC_LYRICS_H 32
+#define MUSIC_EQ_X 151
+#define MUSIC_EQ_Y 136
 
-#define MUSIC_LEFT_BTN_X           8
-#define MUSIC_LEFT_BTN_Y           176
-#define MUSIC_LEFT_BTN_W           74
-#define MUSIC_LEFT_BTN_H           42
+#define MUSIC_PROGRESS_X 35
+#define MUSIC_PROGRESS_Y 171
+#define MUSIC_PROGRESS_W 214
+#define MUSIC_PROGRESS_H 10
 
-#define MUSIC_MAIN_BTN_X           88
-#define MUSIC_MAIN_BTN_Y           167
-#define MUSIC_MAIN_BTN_W           108
-#define MUSIC_MAIN_BTN_H           50
+#define MUSIC_LIST_X 12
+#define MUSIC_LIST_Y 198
+#define MUSIC_PREV_X 82
+#define MUSIC_PREV_Y 197
+#define MUSIC_PLAY_X 116
+#define MUSIC_PLAY_Y 187
+#define MUSIC_NEXT_X 177
+#define MUSIC_NEXT_Y 197
+#define MUSIC_COMPANION_X 226
+#define MUSIC_COMPANION_Y 186
+#define MUSIC_NOTE_X 258
+#define MUSIC_NOTE_Y 179
 
-#define MUSIC_RIGHT_BTN_X          202
-#define MUSIC_RIGHT_BTN_Y          176
-#define MUSIC_RIGHT_BTN_W          74
-#define MUSIC_RIGHT_BTN_H          42
+#define MUSIC_COLOR_TEXT 0x3D3227
+#define MUSIC_COLOR_TEXT_SOFT 0x776F61
+#define MUSIC_COLOR_ACCENT 0x86A844
+#define MUSIC_COLOR_TRACK 0xD9DFC5
+#define MUSIC_COLOR_WHITE 0xFFFCF2
 
-#define MUSIC_VOLUME_X             12
-#define MUSIC_VOLUME_Y             223
-
-#define MUSIC_DOTS_Y               222
+#define MUSIC_ANIM_TIMER_MS 130U
+#define MUSIC_DEFAULT_TRACK_SECONDS 30U

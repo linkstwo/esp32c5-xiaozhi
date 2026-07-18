@@ -14,6 +14,7 @@ extern "C" {
 extern void ui_Clock_screen_init(void);
 extern void ui_Clock_screen_destroy(void);
 extern void ui_event_Clock(lv_event_t * e);
+extern void ui_Clock_set_time_text(const char * text, bool animate);
 extern lv_obj_t * ui_Clock;
 extern lv_obj_t * ui_Clock_Panel;
 extern lv_obj_t * ui_Dot1;

@@ -33,6 +33,7 @@ public:
     void ToggleFocusTimer();
     void ResetFocusTimer();
     void SetFocusDuration(int32_t duration_seconds);
+    void HandleTouchSwipe(int32_t delta_x, int32_t delta_y);
 
 public:
     enum class MusicUiState : uint8_t {
@@ -72,6 +73,8 @@ private:
     uint32_t music_track_index_ = 0;
     uint32_t music_track_total_ = 2;
     uint32_t music_volume_percent_ = 80;
+    std::string music_title_ = "Boss Koto";
+    std::string music_artist_ = "Local OGG/Opus";
     lv_timer_t* live_data_timer_ = nullptr;
     lv_timer_t* focus_ui_timer_ = nullptr;
     FocusUiState focus_state_ = FocusUiState::Ready;

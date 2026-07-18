@@ -20,36 +20,45 @@ SET(SOURCES components/ui_comp_alarm_comp.c
     images/ui_img_clock_sec_png.c
     images/ui_img_phone_png.c
     images/ui_img_avatar_png.c
-    images/ui_img_play_png.c
-    images/ui_img_album_png.c
-    images/ui_img_backward_png.c
-    images/ui_img_forward_png.c
     images/ui_img_weather_1_png.c
     images/ui_img_weather_2_png.c
     images/ui_img_weather_3_png.c
     images/ui_img_home_mascot.c
-    images/ui_img_home_corner_leaf.c
     images/ui_img_home_calendar.c
-    images/ui_img_home_temperature.c
-    images/ui_img_home_humidity.c
     images/ui_img_home_center_leaf.c
+    images/ui_img_home_branch_corner.c
+    images/ui_img_home_card_gloss.c
+    images/ui_img_home_env_overlay.c
+    images/ui_img_home_hum_icon.c
+    images/ui_img_home_hum_plant.c
+    images/ui_img_home_moon.c
+    images/ui_img_home_paper_texture.c
+    images/ui_img_home_sparkle_large.c
+    images/ui_img_home_sparkle_small.c
+    images/ui_img_home_temp_icon.c
+    images/ui_img_home_temp_plant.c
+    images/ui_img_home_time_halo.c
+    images/ui_img_music_v3_assets.c
     images/ui_img_focus_mascot_ready.c
     images/ui_img_focus_mascot_running.c
     images/ui_img_focus_mascot_paused.c
     images/ui_img_focus_mascot_finished.c
-    images/ui_img_focus_corner_vine.c
-    images/ui_img_focus_left_decor_ready.c
-    images/ui_img_focus_left_decor_running.c
-    images/ui_img_focus_left_decor_paused.c
-    images/ui_img_focus_left_decor_finished.c
-    images/ui_img_focus_back.c
-    images/ui_img_focus_gear.c
-    images/ui_img_focus_edit.c
-    images/ui_img_focus_leaf.c
-    images/ui_img_focus_medal.c
-    images/ui_img_focus_pause.c
-    images/ui_img_focus_stop.c
-    images/ui_img_focus_cup.c
-    fonts/ui_font_Number.c)
+    images/ui_img_focus_title_tomato.c
+    images/ui_img_focus_sparkle_small.c
+    images/ui_img_focus_sparkle_large.c
+    images/ui_img_focus_orbit_glow.c
+    images/ui_img_focus_orbit_trail.c
+    images/ui_img_focus_paper_texture.c
+    images/ui_img_focus_ring_overlay.c
+    images/ui_img_focus_tomato_crown.c
+    images/ui_img_focus_tomato_emblem.c
+    images/ui_img_focus_corner_vine_right.c
+    images/ui_img_focus_button_primary_overlay.c
+    images/ui_img_focus_button_secondary_overlay.c
+    fonts/ui_font_Number.c
+    fonts/ui_font_FocusDigits.c
+    fonts/ui_font_HomeTime.c
+    fonts/ui_font_MusicTitle.c
+    fonts/ui_font_MusicMeta.c)
 
 add_library(ui ${SOURCES})
