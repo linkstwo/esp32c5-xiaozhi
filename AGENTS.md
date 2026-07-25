@@ -1,6 +1,6 @@
 # Codex project instructions
 
-These rules apply to every task in this repository. The priority is to finish the requested change correctly while minimizing token usage, tool calls, build time, and unnecessary file changes.
+These rules apply to every task in this repository. Correctness and implementation quality come first; within that constraint, minimize token usage, tool calls, build time, and unnecessary file changes.
 
 ## Token and time discipline
 
@@ -14,6 +14,8 @@ These rules apply to every task in this repository. The priority is to finish th
 
 ## Build and simulator discipline
 
+- After code changes, run the existing VS Code task `xiaozhi: ui preview build and run` when the change can affect UI behavior. Inspect the running preview when visual or interactive behavior changed.
+- If the UI preview is unavailable, unrelated to the change, or fails because of the environment, perform the cheapest relevant alternative verification and explicitly report what was not verified and why.
 - Do not start with a full ESP-IDF or LVGL simulator build. First inspect the relevant source, make the targeted edit, and run the cheapest meaningful validation.
 - Prefer syntax checks, existing incremental builds, or building only the affected target. Run a full clean build only when it is necessary to prove correctness or when the user explicitly requests it.
 - Before any potentially long-running build, check whether the environment and paths are compatible. On Windows/MinGW, avoid creating simulator workspaces under paths containing Chinese characters or other path-sensitive characters.

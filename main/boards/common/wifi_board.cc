@@ -28,9 +28,9 @@ static const char *TAG = "WifiBoard";
 static constexpr int CONNECT_TIMEOUT_SEC = 60;
 
 namespace {
-// Quick-edit Wi-Fi credentials: update these two strings when the router password changes.
-constexpr char kQuickWifiSsid[] = "stonehotel";
-constexpr char kQuickWifiPassword[] = "86222136";
+// Keep public builds free of local credentials. Leave empty to use normal provisioning.
+constexpr char kQuickWifiSsid[] = "";
+constexpr char kQuickWifiPassword[] = "";
 }
 
 WifiBoard::WifiBoard() {
@@ -103,14 +103,22 @@ void WifiBoard::ApplyQuickWifiCredentials() {
     auto& ssid_manager = SsidManager::GetInstance();
     const auto& ssid_list = ssid_manager.GetSsidList();
     auto it = std::find_if(ssid_list.begin(), ssid_list.end(), [](const SsidItem& item) {
-        return item.ssid == kQuickWifiSsid && item.password == kQuickWifiPassword;
+        return item.ssid == kQuickWifiSsid;
     });
-    if (it != ssid_list.end()) {
+    if (it == ssid_list.end()) {
+        ESP_LOGI(TAG, "Apply quick WiFi credentials for SSID: %s", kQuickWifiSsid);
+        ssid_manager.AddSsid(kQuickWifiSsid, kQuickWifiPassword);
         return;
     }
 
-    ESP_LOGI(TAG, "Apply quick WiFi credentials for SSID: %s", kQuickWifiSsid);
-    ssid_manager.AddSsid(kQuickWifiSsid, kQuickWifiPassword);
+    const int index = static_cast<int>(std::distance(ssid_list.begin(), it));
+    if (it->password != kQuickWifiPassword) {
+        ESP_LOGI(TAG, "Update quick WiFi password for SSID: %s", kQuickWifiSsid);
+        ssid_manager.AddSsid(kQuickWifiSsid, kQuickWifiPassword);
+    }
+    if (index > 0) {
+        ssid_manager.SetDefaultSsid(index);
+    }
 }
 
 void WifiBoard::TryWifiConnect() {

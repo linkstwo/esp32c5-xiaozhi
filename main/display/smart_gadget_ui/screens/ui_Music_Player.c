@@ -36,7 +36,6 @@ static lv_obj_t * s_album_frame = NULL;
 static lv_obj_t * s_equalizer = NULL;
 static lv_obj_t * s_progress = NULL;
 static lv_obj_t * s_list_icon = NULL;
-static lv_obj_t * s_list_text = NULL;
 static lv_obj_t * s_prev_icon = NULL;
 static lv_obj_t * s_next_icon = NULL;
 static lv_obj_t * s_play_icon = NULL;
@@ -422,10 +421,7 @@ void ui_Music_Player_screen_init(void)
 
     ui_Music_List_btn = music_image_button(ui_Music_Player, &ui_img_music_v3_btn_list_bg,
                                            MUSIC_LIST_X, MUSIC_LIST_Y);
-    s_list_icon = music_image(ui_Music_List_btn, &ui_img_music_v3_icon_list, 7, 5);
-    s_list_text = music_label(ui_Music_List_btn, "播放列表", 22, 4, 47, 18,
-                              MUSIC_COLOR_TEXT_SOFT, LV_TEXT_ALIGN_CENTER);
-    lv_obj_set_style_transform_zoom(s_list_text, 200, 0);
+    s_list_icon = music_centered_icon(ui_Music_List_btn, &ui_img_music_v3_icon_list);
 
     ui_Backward = music_image_button(ui_Music_Player, &ui_img_music_v3_btn_small_bg,
                                      MUSIC_PREV_X, MUSIC_PREV_Y);
@@ -493,7 +489,6 @@ void ui_Music_Player_screen_destroy(void)
     s_equalizer = NULL;
     s_progress = NULL;
     s_list_icon = NULL;
-    s_list_text = NULL;
     s_prev_icon = NULL;
     s_next_icon = NULL;
     s_play_icon = NULL;

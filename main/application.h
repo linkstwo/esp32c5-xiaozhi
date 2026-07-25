@@ -116,6 +116,7 @@ public:
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
     void ToggleMusicPlayback();
+    bool SetMusicPlayback(bool playing);
     void PreviousMusicTrack();
     void NextMusicTrack();
     bool ShouldMusicPlay() const { return music_should_play_.load(); }

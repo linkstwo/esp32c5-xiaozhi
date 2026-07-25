@@ -21,6 +21,7 @@ set(SOURCES
     "ota.cc"
     "assets.cc"
     "mcp_server.cc"
+    "voice_control_mcp_tools.cc"
 
     "audio/audio_codec.cc"
     "audio/audio_service.cc"
@@ -77,6 +78,8 @@ set(SOURCES
     "display/smart_gadget_ui/images/ui_img_weather_1_png.c"
     "display/smart_gadget_ui/images/ui_img_weather_2_png.c"
     "display/smart_gadget_ui/images/ui_img_weather_3_png.c"
+    "display/smart_gadget_ui/images/ui_img_environment_v3_assets.c"
+    "display/smart_gadget_ui/images/ui_img_device_v3_assets.c"
     "display/smart_gadget_ui/images/ui_img_home_mascot.c"
     "display/smart_gadget_ui/images/ui_img_home_calendar.c"
     "display/smart_gadget_ui/images/ui_img_home_center_leaf.c"
@@ -204,5 +207,19 @@ add_custom_target(lang_header ALL DEPENDS ${LANG_HEADER})
 partition_table_get_partition_info(size "--partition-name assets" "size")
 partition_table_get_partition_info(offset "--partition-name assets" "offset")
 if("${size}" AND "${offset}")
-    message(STATUS "Product CMake: assets partition found. Asset flashing is intentionally simplified in product mode.")
+    set(CALL_UI_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets/call_ui_v3")
+    set(CALL_UI_ASSET_BIN "${CMAKE_BINARY_DIR}/call_ui_assets.bin")
+    file(GLOB CALL_UI_ASSET_FILES "${CALL_UI_ASSET_DIR}/*")
+    add_custom_command(
+        OUTPUT "${CALL_UI_ASSET_BIN}"
+        COMMAND ${PYTHON} "${PROJECT_DIR}/scripts/build_default_assets.py"
+                --sdkconfig "${SDKCONFIG}"
+                --extra_files "${CALL_UI_ASSET_DIR}"
+                --output "${CALL_UI_ASSET_BIN}"
+        DEPENDS ${CALL_UI_ASSET_FILES} "${PROJECT_DIR}/scripts/build_default_assets.py"
+        COMMENT "Packing call UI assets partition"
+        VERBATIM
+    )
+    add_custom_target(call_ui_assets ALL DEPENDS "${CALL_UI_ASSET_BIN}")
+    esptool_py_flash_target_image(flash call-ui-assets "${offset}" "${CALL_UI_ASSET_BIN}")
 endif()

@@ -61,6 +61,10 @@ void Display::SetMusicPlaying(bool playing) {
     ESP_LOGW(TAG, "SetMusicPlaying: %d", playing);
 }
 
+void Display::OnDeviceStateChanged(DeviceState state) {
+    (void)state;
+}
+
 void Display::SetTheme(Theme* theme) {
     current_theme_ = theme;
     Settings settings("display", true);

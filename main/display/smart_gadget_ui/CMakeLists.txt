@@ -23,6 +23,8 @@ SET(SOURCES components/ui_comp_alarm_comp.c
     images/ui_img_weather_1_png.c
     images/ui_img_weather_2_png.c
     images/ui_img_weather_3_png.c
+    images/ui_img_environment_v3_assets.c
+    images/ui_img_device_v3_assets.c
     images/ui_img_home_mascot.c
     images/ui_img_home_calendar.c
     images/ui_img_home_center_leaf.c

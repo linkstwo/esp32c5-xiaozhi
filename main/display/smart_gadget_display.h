@@ -21,6 +21,7 @@ public:
     void SetMusicTrackInfo(const char* title, const char* artist) override;
     void SetMusicTrackIndex(uint32_t index, uint32_t total) override;
     void SetMusicPlaying(bool playing) override;
+    void OnDeviceStateChanged(DeviceState state) override;
     void SetEmotion(const char* emotion) override;
     void SetTheme(Theme* theme) override;
     void UpdateStatusBar(bool update_all = false) override;
@@ -33,7 +34,22 @@ public:
     void ToggleFocusTimer();
     void ResetFocusTimer();
     void SetFocusDuration(int32_t duration_seconds);
+    bool StartFocusForMinutes(int32_t duration_minutes);
+    bool PauseFocus();
+    bool ResumeFocus();
+    bool StopFocus();
+
+    enum class ExternalPage : uint8_t {
+        Clock,
+        Focus,
+        Music,
+        Weather,
+        Device,
+    };
+    bool OpenPage(ExternalPage page);
     void HandleTouchSwipe(int32_t delta_x, int32_t delta_y);
+    void HandleCallPrimaryAction();
+    void HandleCallRightAction();
 
 public:
     enum class MusicUiState : uint8_t {
@@ -65,6 +81,7 @@ private:
     std::atomic<int> current_page_{kPageSplash};
     bool ui_ready_ = false;
     bool call_buttons_bound_ = false;
+    bool call_session_active_ = false;
     bool music_buttons_bound_ = false;
     bool today_buttons_bound_ = false;
     bool music_playing_ = false;
@@ -87,6 +104,11 @@ private:
     int32_t focus_last_arc_value_ = -1;
     bool focus_finished_counted_ = false;
     std::string call_status_ = "Preparing...";
+    std::string call_caption_;
+    std::string call_emotion_ = "neutral";
+    uint8_t call_ui_state_ = 0;
+    uint8_t call_caption_role_ = 0;
+    lv_timer_t* call_ended_timer_ = nullptr;
     std::string user_message_;
     std::string assistant_message_;
     std::string focus_task_text_ = "完成最重要的一小步";
@@ -117,6 +139,7 @@ private:
     void RenderTodayFocusState(bool animate);
     static void LiveDataTimerCallback(lv_timer_t* timer);
     static void FocusUiTimerCallback(lv_timer_t* timer);
+    static void CallEndedTimerCallback(lv_timer_t* timer);
     void UpdateCallStatus(const char* status);
     void LoadPage(PageIndex page);
     void EnsureSensorServiceStarted();

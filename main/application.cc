@@ -942,6 +942,7 @@ void Application::HandleStateChangedEvent() {
     auto display = board.GetDisplay();
     auto led = board.GetLed();
     led->OnStateChanged();
+    display->OnDeviceStateChanged(new_state);
     
     switch (new_state) {
         case kDeviceStateUnknown:
@@ -1203,6 +1204,20 @@ void Application::ToggleMusicPlayback() {
     } else {
         StartMusicLoop();
     }
+}
+
+bool Application::SetMusicPlayback(bool playing) {
+    if (playing) {
+        if (!music_should_play_.load()) {
+            StartMusicLoop();
+        }
+        return music_should_play_.load();
+    }
+
+    if (music_should_play_.load() || music_is_playing_.load()) {
+        PauseMusic();
+    }
+    return true;
 }
 
 void Application::PreviousMusicTrack() {

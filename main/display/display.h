@@ -2,6 +2,7 @@
 #define DISPLAY_H
 
 #include "emoji_collection.h"
+#include "device_state.h"
 
 #ifndef CONFIG_USE_EMOTE_MESSAGE_STYLE
 #define HAVE_LVGL 1
@@ -40,6 +41,7 @@ public:
     virtual void SetMusicTrackInfo(const char* title, const char* artist);
     virtual void SetMusicTrackIndex(uint32_t index, uint32_t total);
     virtual void SetMusicPlaying(bool playing);
+    virtual void OnDeviceStateChanged(DeviceState state);
     virtual void SetTheme(Theme* theme);
     virtual Theme* GetTheme() { return current_theme_; }
     virtual void UpdateStatusBar(bool update_all = false);

@@ -11,6 +11,8 @@ extern "C" {
 extern void ui_Device_screen_init(void);
 extern void ui_Device_screen_destroy(void);
 extern void ui_event_Device(lv_event_t * e);
+extern int ui_Device_is_detail_visible(void);
+extern void ui_Device_return_to_overview(void);
 extern lv_obj_t * ui_Device;
 extern lv_obj_t * ui_Device_header;
 extern lv_obj_t * ui_Device_title;
@@ -39,6 +41,18 @@ extern lv_obj_t * ui_Device_board;
 extern lv_obj_t * ui_Device_heap;
 extern lv_obj_t * ui_Device_uptime;
 extern lv_obj_t * ui_Device_page;
+extern lv_obj_t * ui_Device_health_title;
+extern lv_obj_t * ui_Device_health_subtitle;
+extern lv_obj_t * ui_Device_temperature;
+extern lv_obj_t * ui_Device_humidity;
+extern lv_obj_t * ui_Device_pressure;
+extern lv_obj_t * ui_Device_co2;
+extern lv_obj_t * ui_Device_sensor_accuracy;
+extern lv_obj_t * ui_Device_overview_wifi;
+extern lv_obj_t * ui_Device_overview_sensor;
+extern lv_obj_t * ui_Device_overview_audio;
+extern lv_obj_t * ui_Device_overview_heap;
+extern lv_obj_t * ui_Device_overview_uptime;
 
 #ifdef __cplusplus
 } /*extern "C"*/

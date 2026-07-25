@@ -4,6 +4,7 @@
 #include "button.h"
 #include "config.h"
 #include "mcp_server.h"
+#include "voice_control_mcp_tools.h"
 #include <wifi_station.h>
 #include <esp_log.h>
 #include <driver/i2c_master.h>
@@ -302,6 +303,7 @@ public:
         InitializeSpi();
         InitializeLcdDisplay();
         InitializeTouch();
+        RegisterVoiceControlMcpTools(McpServer::GetInstance());
     }
 
     virtual AudioCodec* GetAudioCodec() override

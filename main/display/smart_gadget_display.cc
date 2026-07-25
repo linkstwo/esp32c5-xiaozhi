@@ -1,6 +1,7 @@
 ﻿#include "smart_gadget_display.h"
 
 #include "application.h"
+#include "assets.h"
 #include "assets/lang_config.h"
 #include "board.h"
 #include "sensor_service.hpp"
@@ -25,10 +26,30 @@ LV_FONT_DECLARE(ui_font_FocusDigits);
 
 SmartGadgetDisplay* g_smart_gadget_display = nullptr;
 
+extern "C" int smart_gadget_load_call_asset(const char* name, const uint8_t** data, size_t* size) {
+    void* ptr = nullptr;
+    size_t asset_size = 0;
+    if (name == nullptr || data == nullptr || size == nullptr ||
+        !Assets::GetInstance().GetAssetData(name, ptr, asset_size)) {
+        return 0;
+    }
+    *data = static_cast<const uint8_t*>(ptr);
+    *size = asset_size;
+    return 1;
+}
+
 namespace {
-constexpr int kFocusDurationSeconds = 25 * 60;
+constexpr int32_t kFocusDurationSeconds = 25 * 60;
+constexpr int32_t kFocusMinDurationSeconds = 60;
+constexpr int32_t kFocusMaxDurationSeconds = 60 * 60;
 constexpr uint32_t kMusicTrackTotalUi = 2;
 constexpr uint32_t kMusicVolumePercentUi = 80;
+constexpr lv_style_selector_t kStyleMainDefault =
+    static_cast<lv_style_selector_t>(LV_PART_MAIN) |
+    static_cast<lv_style_selector_t>(LV_STATE_DEFAULT);
+constexpr lv_style_selector_t kStyleIndicatorDefault =
+    static_cast<lv_style_selector_t>(LV_PART_INDICATOR) |
+    static_cast<lv_style_selector_t>(LV_STATE_DEFAULT);
 
 struct CountdownTarget {
     const char* label;
@@ -191,7 +212,7 @@ void AnimateObjectOpacity(lv_obj_t* obj, int32_t from, int32_t to, uint32_t dura
     lv_anim_set_values(&anim, from, to);
     lv_anim_set_duration(&anim, duration);
     lv_anim_set_exec_cb(&anim, [](void* var, int32_t value) {
-        lv_obj_set_style_opa(static_cast<lv_obj_t*>(var), value, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_opa(static_cast<lv_obj_t*>(var), value, kStyleMainDefault);
     });
     lv_anim_start(&anim);
 }
@@ -199,7 +220,7 @@ void AnimateObjectOpacity(lv_obj_t* obj, int32_t from, int32_t to, uint32_t dura
 void SetTodayButtonLabel(lv_obj_t* icon_obj, lv_obj_t* text_obj, const char* icon_text,
                          const char* label_text, uint32_t color) {
     if (icon_obj != nullptr) {
-        lv_obj_set_style_text_color(icon_obj, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(icon_obj, lv_color_hex(color), kStyleMainDefault);
         lv_label_set_text(icon_obj, icon_text != nullptr ? icon_text : "");
         if (icon_text != nullptr && icon_text[0] != '\0') {
             lv_obj_clear_flag(icon_obj, LV_OBJ_FLAG_HIDDEN);
@@ -208,7 +229,7 @@ void SetTodayButtonLabel(lv_obj_t* icon_obj, lv_obj_t* text_obj, const char* ico
         }
     }
     if (text_obj != nullptr) {
-        lv_obj_set_style_text_color(text_obj, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(text_obj, lv_color_hex(color), kStyleMainDefault);
         lv_label_set_text(text_obj, label_text != nullptr ? label_text : "");
     }
 }
@@ -281,14 +302,9 @@ void SmartGadgetDisplay::ApplyInitialText() {
 }
 
 void SmartGadgetDisplay::ApplyCallText() {
-    if (ui_Elena != nullptr) {
-        ApplyReadableFont(ui_Elena);
-        lv_label_set_text(ui_Elena, "XiaoZhi AI");
-    }
-    if (ui_Incoming != nullptr) {
-        ApplyReadableFont(ui_Incoming);
-        lv_label_set_text(ui_Incoming, call_status_.c_str());
-    }
+    ui_call_set_state(static_cast<ui_call_state_t>(call_ui_state_));
+    ui_call_set_caption(static_cast<ui_call_caption_role_t>(call_caption_role_), call_caption_.c_str());
+    ui_call_set_emotion(call_emotion_.c_str());
     BindCallButtons();
 }
 
@@ -323,46 +339,53 @@ void SmartGadgetDisplay::ApplyWeatherText() {
     char pressure_text[24];
     char humidity_text[24];
     if (has_sensor_data) {
-        snprintf(temp_text, sizeof(temp_text), "%.0fC", sensor_data.temperature);
-        snprintf(iaq_text, sizeof(iaq_text), "IAQ %.0f", sensor_data.iaq);
-        snprintf(pressure_text, sizeof(pressure_text), "%.0fhPa", sensor_data.pressure / 100.0f);
-        snprintf(humidity_text, sizeof(humidity_text), "%.0f%%", sensor_data.humidity);
+        snprintf(temp_text, sizeof(temp_text), "%.0f", sensor_data.temperature);
+        snprintf(iaq_text, sizeof(iaq_text), "%.0f", sensor_data.iaq);
+        snprintf(pressure_text, sizeof(pressure_text), "%.0f", sensor_data.pressure / 100.0f);
+        snprintf(humidity_text, sizeof(humidity_text), "%.0f", sensor_data.humidity);
     } else {
         snprintf(temp_text, sizeof(temp_text), "--");
-        snprintf(iaq_text, sizeof(iaq_text), "IAQ --");
-        snprintf(pressure_text, sizeof(pressure_text), "P -- hPa");
-        snprintf(humidity_text, sizeof(humidity_text), "H -- %%");
+        snprintf(iaq_text, sizeof(iaq_text), "--");
+        snprintf(pressure_text, sizeof(pressure_text), "--");
+        snprintf(humidity_text, sizeof(humidity_text), "--");
     }
 
     if (ui_Pary_Cloud != nullptr) {
-        ApplyReadableFont(ui_Pary_Cloud);
         if (!has_sensor_data) {
-            lv_label_set_text(ui_Pary_Cloud, "Sensor wait");
+            lv_label_set_text(ui_Pary_Cloud, "等待传感器");
         } else if (sensor_data.iaq <= 50) {
-            lv_label_set_text(ui_Pary_Cloud, "Excellent air");
+            lv_label_set_text(ui_Pary_Cloud, "空气清新");
         } else if (sensor_data.iaq <= 100) {
-            lv_label_set_text(ui_Pary_Cloud, "Good air");
+            lv_label_set_text(ui_Pary_Cloud, "空气舒适");
         } else if (sensor_data.iaq <= 150) {
-            lv_label_set_text(ui_Pary_Cloud, "Moderate air");
+            lv_label_set_text(ui_Pary_Cloud, "空气一般");
         } else if (sensor_data.iaq <= 200) {
-            lv_label_set_text(ui_Pary_Cloud, "Polluted air");
+            lv_label_set_text(ui_Pary_Cloud, "建议通风");
         } else {
-            lv_label_set_text(ui_Pary_Cloud, "Bad air");
+            lv_label_set_text(ui_Pary_Cloud, "空气较差");
+        }
+    }
+    if (ui_Weather_Advice != nullptr) {
+        if (!has_sensor_data) {
+            lv_label_set_text(ui_Weather_Advice, "正在连接环境传感器");
+        } else if (sensor_data.iaq <= 100) {
+            lv_label_set_text(ui_Weather_Advice, "糖糖建议：适合开始专注");
+        } else if (sensor_data.iaq <= 150) {
+            lv_label_set_text(ui_Weather_Advice, "糖糖建议：留意空气变化");
+        } else {
+            lv_label_set_text(ui_Weather_Advice, "糖糖建议：开窗通风");
         }
     }
     if (ui_Celsius != nullptr) {
         lv_label_set_text(ui_Celsius, temp_text);
     }
     if (ui_W1_Num != nullptr) {
-        ApplyReadableFont(ui_W1_Num);
         lv_label_set_text(ui_W1_Num, iaq_text);
     }
     if (ui_W2_Num != nullptr) {
-        ApplyReadableFont(ui_W2_Num);
         lv_label_set_text(ui_W2_Num, pressure_text);
     }
     if (ui_W3_Num != nullptr) {
-        ApplyReadableFont(ui_W3_Num);
         lv_label_set_text(ui_W3_Num, humidity_text);
     }
 }
@@ -454,20 +477,13 @@ void SmartGadgetDisplay::ApplyDeviceText() {
     const char* status = call_status_.empty() ? "Ready" : call_status_.c_str();
     char heap_text[32];
     char uptime_text[32];
-    char sensor_state[40];
     char sensor_iaq[40];
-    char sensor_env[64];
     snprintf(heap_text, sizeof(heap_text), "Heap %u KB", static_cast<unsigned>(esp_get_free_heap_size() / 1024));
     snprintf(uptime_text, sizeof(uptime_text), "Up %lld s", static_cast<long long>(esp_timer_get_time() / 1000000));
     if (has_sensor_data) {
-        snprintf(sensor_state, sizeof(sensor_state), "BME690 OK acc %u", sensor_data.iaq_accuracy);
         snprintf(sensor_iaq, sizeof(sensor_iaq), "IAQ %.0f CO2 %.0f", sensor_data.iaq, sensor_data.co2_equivalent);
-        snprintf(sensor_env, sizeof(sensor_env), "T %.1fC H %.0f%% P %.0fhPa",
-                 sensor_data.temperature, sensor_data.humidity, sensor_data.pressure / 100.0f);
     } else {
-        snprintf(sensor_state, sizeof(sensor_state), "BME690 waiting");
         snprintf(sensor_iaq, sizeof(sensor_iaq), "IAQ -- CO2 --");
-        snprintf(sensor_env, sizeof(sensor_env), "T --C H --%% P --hPa");
     }
 
     if (ui_Device_title != nullptr) {
@@ -482,7 +498,11 @@ void SmartGadgetDisplay::ApplyDeviceText() {
     }
     if (ui_Device_wifi != nullptr) {
         ApplyReadableFont(ui_Device_wifi);
-        lv_label_set_text(ui_Device_wifi, "Wi-Fi linked");
+        lv_label_set_text(ui_Device_wifi, "已连接");
+    }
+    if (ui_Device_overview_wifi != nullptr) {
+        ApplyReadableFont(ui_Device_overview_wifi);
+        lv_label_set_text(ui_Device_overview_wifi, "在线");
     }
     if (ui_Device_server != nullptr) {
         ApplyReadableFont(ui_Device_server);
@@ -490,7 +510,7 @@ void SmartGadgetDisplay::ApplyDeviceText() {
     }
     if (ui_Device_protocol != nullptr) {
         ApplyReadableFont(ui_Device_protocol);
-        lv_label_set_text(ui_Device_protocol, "Protocol realtime");
+        lv_label_set_text(ui_Device_protocol, "已连接");
     }
     if (ui_Device_chat_state != nullptr) {
         ApplyReadableFont(ui_Device_chat_state);
@@ -506,15 +526,53 @@ void SmartGadgetDisplay::ApplyDeviceText() {
     }
     if (ui_Device_sensor_state != nullptr) {
         ApplyReadableFont(ui_Device_sensor_state);
-        lv_label_set_text(ui_Device_sensor_state, sensor_state);
+        lv_label_set_text(ui_Device_sensor_state, has_sensor_data ? "正常" : "预热中");
     }
     if (ui_Device_sensor_iaq != nullptr) {
         ApplyReadableFont(ui_Device_sensor_iaq);
-        lv_label_set_text(ui_Device_sensor_iaq, sensor_iaq);
+        lv_label_set_text(ui_Device_sensor_iaq, has_sensor_data ? sensor_iaq : "--");
     }
     if (ui_Device_sensor_env != nullptr) {
         ApplyReadableFont(ui_Device_sensor_env);
-        lv_label_set_text(ui_Device_sensor_env, sensor_env);
+        lv_label_set_text(ui_Device_sensor_env, has_sensor_data ? "已更新" : "--");
+    }
+    if (ui_Device_temperature != nullptr) {
+        char temperature[20];
+        ApplyReadableFont(ui_Device_temperature);
+        snprintf(temperature, sizeof(temperature), has_sensor_data ? "%.1f C" : "--", sensor_data.temperature);
+        lv_label_set_text(ui_Device_temperature, temperature);
+    }
+    if (ui_Device_humidity != nullptr) {
+        char humidity[20];
+        ApplyReadableFont(ui_Device_humidity);
+        snprintf(humidity, sizeof(humidity), has_sensor_data ? "%.0f%%" : "--", sensor_data.humidity);
+        lv_label_set_text(ui_Device_humidity, humidity);
+    }
+    if (ui_Device_pressure != nullptr) {
+        char pressure[20];
+        ApplyReadableFont(ui_Device_pressure);
+        snprintf(pressure, sizeof(pressure), has_sensor_data ? "%.0f hPa" : "--", sensor_data.pressure / 100.0f);
+        lv_label_set_text(ui_Device_pressure, pressure);
+    }
+    if (ui_Device_co2 != nullptr) {
+        char co2[20];
+        ApplyReadableFont(ui_Device_co2);
+        snprintf(co2, sizeof(co2), has_sensor_data ? "%.0f ppm" : "--", sensor_data.co2_equivalent);
+        lv_label_set_text(ui_Device_co2, co2);
+    }
+    if (ui_Device_sensor_accuracy != nullptr) {
+        char accuracy[12];
+        ApplyReadableFont(ui_Device_sensor_accuracy);
+        snprintf(accuracy, sizeof(accuracy), has_sensor_data ? "%u" : "--", sensor_data.iaq_accuracy);
+        lv_label_set_text(ui_Device_sensor_accuracy, accuracy);
+    }
+    if (ui_Device_overview_sensor != nullptr) {
+        ApplyReadableFont(ui_Device_overview_sensor);
+        lv_label_set_text(ui_Device_overview_sensor, has_sensor_data ? "正常" : "预热中");
+    }
+    if (ui_Device_overview_audio != nullptr) {
+        ApplyReadableFont(ui_Device_overview_audio);
+        lv_label_set_text(ui_Device_overview_audio, "正常");
     }
     if (ui_Device_mic != nullptr) {
         ApplyReadableFont(ui_Device_mic);
@@ -532,9 +590,17 @@ void SmartGadgetDisplay::ApplyDeviceText() {
         ApplyReadableFont(ui_Device_heap);
         lv_label_set_text(ui_Device_heap, heap_text);
     }
+    if (ui_Device_overview_heap != nullptr) {
+        ApplyReadableFont(ui_Device_overview_heap);
+        lv_label_set_text(ui_Device_overview_heap, heap_text);
+    }
     if (ui_Device_uptime != nullptr) {
         ApplyReadableFont(ui_Device_uptime);
         lv_label_set_text(ui_Device_uptime, uptime_text);
+    }
+    if (ui_Device_overview_uptime != nullptr) {
+        ApplyReadableFont(ui_Device_overview_uptime);
+        lv_label_set_text(ui_Device_overview_uptime, uptime_text);
     }
     if (ui_Device_page != nullptr) {
         ApplyReadableFont(ui_Device_page);
@@ -566,12 +632,77 @@ void SmartGadgetDisplay::SetFocusDuration(int32_t duration_seconds) {
         return;
     }
 
-    (void)duration_seconds;
-    focus_selected_duration_seconds_ = kFocusDurationSeconds;
-    focus_active_duration_seconds_ = kFocusDurationSeconds;
-    focus_remaining_seconds_ = kFocusDurationSeconds;
+    duration_seconds = std::clamp(duration_seconds, kFocusMinDurationSeconds, kFocusMaxDurationSeconds);
+    focus_selected_duration_seconds_ = duration_seconds;
+    focus_active_duration_seconds_ = duration_seconds;
+    focus_remaining_seconds_ = duration_seconds;
     focus_finished_counted_ = false;
     RenderTodayFocusState(true);
+}
+
+bool SmartGadgetDisplay::StartFocusForMinutes(int32_t duration_minutes) {
+    if (!setup_ui_called_ || duration_minutes < 1 || duration_minutes > 60) {
+        return false;
+    }
+
+    DisplayLockGuard lock(this);
+    const int32_t duration_seconds = duration_minutes * 60;
+    focus_selected_duration_seconds_ = duration_seconds;
+    focus_active_duration_seconds_ = duration_seconds;
+    focus_remaining_seconds_ = duration_seconds;
+    focus_finished_counted_ = false;
+    StartFocusCountdown(duration_seconds, FocusUiState::Running);
+    RenderTodayFocusState(true);
+    return true;
+}
+
+bool SmartGadgetDisplay::PauseFocus() {
+    if (!setup_ui_called_) {
+        return false;
+    }
+
+    DisplayLockGuard lock(this);
+    if (focus_state_ != FocusUiState::Running) {
+        return false;
+    }
+    UpdateFocusCountdown(esp_timer_get_time());
+    if (focus_state_ != FocusUiState::Running) {
+        return false;
+    }
+    StopFocusCountdown();
+    focus_state_ = FocusUiState::Paused;
+    RenderTodayFocusState(true);
+    return true;
+}
+
+bool SmartGadgetDisplay::ResumeFocus() {
+    if (!setup_ui_called_) {
+        return false;
+    }
+
+    DisplayLockGuard lock(this);
+    if (focus_state_ != FocusUiState::Paused) {
+        return false;
+    }
+    StartFocusCountdown(focus_remaining_seconds_ > 0 ? focus_remaining_seconds_ : focus_selected_duration_seconds_,
+                        FocusUiState::Running);
+    RenderTodayFocusState(true);
+    return true;
+}
+
+bool SmartGadgetDisplay::StopFocus() {
+    if (!setup_ui_called_) {
+        return false;
+    }
+
+    DisplayLockGuard lock(this);
+    StopFocusCountdown();
+    focus_active_duration_seconds_ = focus_selected_duration_seconds_;
+    focus_remaining_seconds_ = focus_selected_duration_seconds_;
+    focus_finished_counted_ = false;
+    focus_state_ = FocusUiState::Ready;
+    RenderTodayFocusState(true);
+    return true;
 }
 
 void SmartGadgetDisplay::StartFocusCountdown(int32_t duration_seconds, FocusUiState running_state) {
@@ -652,41 +783,41 @@ void SmartGadgetDisplay::UpdateFocusPalette(FocusUiState state) {
     const FocusPalette palette = GetFocusPalette(state);
 
     if (ui_Today != nullptr) {
-        lv_obj_set_style_bg_color(ui_Today, lv_color_hex(palette.bg), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_Today, lv_color_hex(palette.bg), kStyleMainDefault);
     }
     if (ui_Today_focus_time != nullptr) {
-        lv_obj_set_style_text_color(ui_Today_focus_time, lv_color_hex(FOCUS_COLOR_TEXT_MAIN), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_Today_focus_time, lv_color_hex(FOCUS_COLOR_TEXT_MAIN), kStyleMainDefault);
     }
     if (ui_Today_focus_unit != nullptr) {
-        lv_obj_set_style_text_color(ui_Today_focus_unit, lv_color_hex(palette.accent), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_Today_focus_unit, lv_color_hex(palette.accent), kStyleMainDefault);
     }
     if (ui_Today_status != nullptr) {
-        lv_obj_set_style_text_color(ui_Today_status, lv_color_hex(FOCUS_COLOR_DEEP_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_Today_status, lv_color_hex(FOCUS_COLOR_DEEP_GREEN), kStyleMainDefault);
     }
     if (ui_Today_status_detail != nullptr) {
-        lv_obj_set_style_text_color(ui_Today_status_detail, lv_color_hex(FOCUS_COLOR_BROWN_TEXT), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_Today_status_detail, lv_color_hex(FOCUS_COLOR_BROWN_TEXT), kStyleMainDefault);
     }
     if (ui_Today_focus_hint != nullptr) {
-        lv_obj_set_style_text_color(ui_Today_focus_hint, lv_color_hex(FOCUS_COLOR_TEXT_GREEN), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(ui_Today_focus_hint, lv_color_hex(FOCUS_COLOR_TEXT_GREEN), kStyleMainDefault);
     }
     if (ui_Today_timer_arc != nullptr) {
-        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_TRACK), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_CORAL_TOMATO), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_TRACK), kStyleMainDefault);
+        lv_obj_set_style_arc_color(ui_Today_timer_arc, lv_color_hex(FOCUS_COLOR_CORAL_TOMATO), kStyleIndicatorDefault);
     }
     if (ui_Today_focus_panel != nullptr) {
-        lv_obj_set_style_border_color(ui_Today_focus_panel, lv_color_hex(FOCUS_COLOR_CREAM_TRACK), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_color(ui_Today_focus_panel, lv_color_hex(FOCUS_COLOR_CREAM_TRACK), kStyleMainDefault);
     }
     if (ui_Today_duration_left != nullptr) {
-        lv_obj_set_style_bg_color(ui_Today_duration_left, lv_color_hex(palette.left_bg), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_border_color(ui_Today_duration_left, lv_color_hex(palette.left_border), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_Today_duration_left, lv_color_hex(palette.left_bg), kStyleMainDefault);
+        lv_obj_set_style_border_color(ui_Today_duration_left, lv_color_hex(palette.left_border), kStyleMainDefault);
     }
     if (ui_Today_focus_btn != nullptr) {
-        lv_obj_set_style_bg_color(ui_Today_focus_btn, lv_color_hex(palette.main_bg), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_border_color(ui_Today_focus_btn, lv_color_hex(palette.main_border), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_Today_focus_btn, lv_color_hex(palette.main_bg), kStyleMainDefault);
+        lv_obj_set_style_border_color(ui_Today_focus_btn, lv_color_hex(palette.main_border), kStyleMainDefault);
     }
     if (ui_Today_focus_reset != nullptr) {
-        lv_obj_set_style_bg_color(ui_Today_focus_reset, lv_color_hex(palette.right_bg), LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_border_color(ui_Today_focus_reset, lv_color_hex(palette.right_border), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_color(ui_Today_focus_reset, lv_color_hex(palette.right_bg), kStyleMainDefault);
+        lv_obj_set_style_border_color(ui_Today_focus_reset, lv_color_hex(palette.right_border), kStyleMainDefault);
     }
 }
 
@@ -701,9 +832,9 @@ void SmartGadgetDisplay::UpdateFocusMascot(FocusUiState state, bool animate) {
     if (!animate || focus_rendered_state_ == state || ui_Today_mascot_back == nullptr) {
         lv_image_set_src(ui_Today_mascot_front, mascot);
         lv_obj_set_pos(ui_Today_mascot_front, position.x, position.y);
-        lv_obj_set_style_opa(ui_Today_mascot_front, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_opa(ui_Today_mascot_front, LV_OPA_COVER, kStyleMainDefault);
         if (ui_Today_mascot_back != nullptr) {
-            lv_obj_set_style_opa(ui_Today_mascot_back, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(ui_Today_mascot_back, LV_OPA_TRANSP, kStyleMainDefault);
         }
         return;
     }
@@ -711,11 +842,11 @@ void SmartGadgetDisplay::UpdateFocusMascot(FocusUiState state, bool animate) {
     const void* previous_src = lv_image_get_src(ui_Today_mascot_front);
     lv_image_set_src(ui_Today_mascot_back, previous_src != nullptr ? previous_src : mascot);
     lv_obj_set_pos(ui_Today_mascot_back, lv_obj_get_x(ui_Today_mascot_front), lv_obj_get_y(ui_Today_mascot_front));
-    lv_obj_set_style_opa(ui_Today_mascot_back, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_opa(ui_Today_mascot_back, LV_OPA_COVER, kStyleMainDefault);
 
     lv_image_set_src(ui_Today_mascot_front, mascot);
     lv_obj_set_pos(ui_Today_mascot_front, position.x, position.y);
-    lv_obj_set_style_opa(ui_Today_mascot_front, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_opa(ui_Today_mascot_front, LV_OPA_TRANSP, kStyleMainDefault);
 
     AnimateObjectOpacity(ui_Today_mascot_back, LV_OPA_COVER, LV_OPA_TRANSP, 220);
     AnimateObjectOpacity(ui_Today_mascot_front, LV_OPA_TRANSP, LV_OPA_COVER, 220);
@@ -819,9 +950,9 @@ void SmartGadgetDisplay::RenderTodayFocusState(bool animate) {
     }
 
     if (ui_Today_focus_time != nullptr) {
-        lv_obj_set_style_text_font(ui_Today_focus_time, time_font, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_font(ui_Today_focus_time, time_font, kStyleMainDefault);
         lv_obj_set_y(ui_Today_focus_time, time_y);
-        lv_obj_set_style_transform_zoom(ui_Today_focus_time, time_zoom, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_transform_zoom(ui_Today_focus_time, time_zoom, kStyleMainDefault);
         lv_label_set_text(ui_Today_focus_time, focus_time_text);
     }
     if (ui_Today_focus_unit != nullptr) {
@@ -922,15 +1053,19 @@ void SmartGadgetDisplay::FocusUiTimerCallback(lv_timer_t* timer) {
     }
 }
 
-static void smart_gadget_hangup_event_cb(lv_event_t* e) {
+static void smart_gadget_call_primary_event_cb(lv_event_t* e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        Application::GetInstance().HangupChat();
+        if (g_smart_gadget_display != nullptr) {
+            g_smart_gadget_display->HandleCallPrimaryAction();
+        }
     }
 }
 
-static void smart_gadget_answer_event_cb(lv_event_t* e) {
+static void smart_gadget_call_right_event_cb(lv_event_t* e) {
     if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-        Application::GetInstance().StartListening();
+        if (g_smart_gadget_display != nullptr) {
+            g_smart_gadget_display->HandleCallRightAction();
+        }
     }
 }
 
@@ -977,17 +1112,16 @@ static void smart_gadget_today_right_event_cb(lv_event_t* e) {
 }
 
 void SmartGadgetDisplay::BindCallButtons() {
-    if (call_buttons_bound_ || ui_Call_Incon1 == nullptr || ui_Call_Incon2 == nullptr) {
+    if (call_buttons_bound_ || ui_Call_PrimaryControl == nullptr || ui_Call_RightControl == nullptr) {
         return;
     }
 
-    lv_obj_add_flag(ui_Call_Incon1, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(ui_Call_Incon1, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_add_event_cb(ui_Call_Incon1, smart_gadget_hangup_event_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_flag(ui_Call_PrimaryControl, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_Call_PrimaryControl, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(ui_Call_PrimaryControl, smart_gadget_call_primary_event_cb, LV_EVENT_CLICKED, nullptr);
 
-    lv_obj_add_flag(ui_Call_Incon2, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(ui_Call_Incon2, LV_OBJ_FLAG_GESTURE_BUBBLE);
-    lv_obj_add_event_cb(ui_Call_Incon2, smart_gadget_answer_event_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_flag(ui_Call_RightControl, LV_OBJ_FLAG_GESTURE_BUBBLE);
+    lv_obj_add_event_cb(ui_Call_RightControl, smart_gadget_call_right_event_cb, LV_EVENT_CLICKED, nullptr);
 
     call_buttons_bound_ = true;
 }
@@ -1243,6 +1377,7 @@ void SmartGadgetDisplay::ConfigureScreenLifecycle(lv_obj_t* screen, PageIndex pa
 
 void SmartGadgetDisplay::HandleScreenLoaded(PageIndex page) {
     current_page_ = page;
+    ui_call_set_screen_active(page == kPageCall ? 1 : 0);
     if (page == kPageWeather || page == kPageDevice || page == kPageToday) {
         EnsureSensorServiceStarted();
     }
@@ -1295,12 +1430,22 @@ void SmartGadgetDisplay::SetChatMessage(const char* role, const char* content) {
 
     if (strcmp(safe_role, "user") == 0) {
         user_message_ = safe_content;
+        call_caption_ = safe_content;
+        call_caption_role_ = UI_CALL_CAPTION_USER;
+        ui_call_set_caption(UI_CALL_CAPTION_USER, safe_content);
+        if (safe_content[0] != '\0' && call_session_active_) {
+            call_ui_state_ = UI_CALL_THINKING;
+            ui_call_set_state(UI_CALL_THINKING);
+        }
         ApplyDeviceText();
         return;
     }
 
     if (strcmp(safe_role, "assistant") == 0) {
         assistant_message_ = safe_content;
+        call_caption_ = safe_content;
+        call_caption_role_ = UI_CALL_CAPTION_ASSISTANT;
+        ui_call_set_caption(UI_CALL_CAPTION_ASSISTANT, safe_content);
         ApplyDeviceText();
         return;
     }
@@ -1314,6 +1459,8 @@ void SmartGadgetDisplay::ClearChatMessages() {
     DisplayLockGuard lock(this);
     user_message_.clear();
     assistant_message_.clear();
+    call_caption_.clear();
+    ui_call_set_caption(UI_CALL_CAPTION_SYSTEM, "");
     ApplyDeviceText();
 }
 
@@ -1362,7 +1509,68 @@ void SmartGadgetDisplay::SetMusicTrackIndex(uint32_t index, uint32_t total) {
 }
 
 void SmartGadgetDisplay::SetEmotion(const char* emotion) {
-    (void)emotion;
+    call_emotion_ = emotion != nullptr ? emotion : "neutral";
+    if (!setup_ui_called_) {
+        return;
+    }
+    DisplayLockGuard lock(this);
+    ui_call_set_emotion(call_emotion_.c_str());
+}
+
+void SmartGadgetDisplay::CallEndedTimerCallback(lv_timer_t* timer) {
+    auto* display = static_cast<SmartGadgetDisplay*>(lv_timer_get_user_data(timer));
+    if (display == nullptr) return;
+    display->call_ended_timer_ = nullptr;
+    if (!display->call_session_active_) {
+        display->call_ui_state_ = UI_CALL_IDLE;
+        ui_call_set_state(UI_CALL_IDLE);
+    }
+}
+
+void SmartGadgetDisplay::OnDeviceStateChanged(DeviceState state) {
+    if (!setup_ui_called_) return;
+    DisplayLockGuard lock(this);
+
+    if (state == kDeviceStateConnecting || state == kDeviceStateListening ||
+        state == kDeviceStateSpeaking) {
+        call_session_active_ = true;
+        if (call_ended_timer_ != nullptr) {
+            lv_timer_delete(call_ended_timer_);
+            call_ended_timer_ = nullptr;
+        }
+        if (state == kDeviceStateConnecting) call_ui_state_ = UI_CALL_CONNECTING;
+        else if (state == kDeviceStateListening) call_ui_state_ = UI_CALL_LISTENING;
+        else call_ui_state_ = UI_CALL_SPEAKING;
+        ui_call_set_state(static_cast<ui_call_state_t>(call_ui_state_));
+        return;
+    }
+
+    if (state == kDeviceStateIdle) {
+        if (call_session_active_) {
+            call_session_active_ = false;
+            call_ui_state_ = UI_CALL_ENDED;
+            ui_call_set_state(UI_CALL_ENDED);
+            call_ended_timer_ = lv_timer_create(CallEndedTimerCallback, 900, this);
+            lv_timer_set_repeat_count(call_ended_timer_, 1);
+        } else if (call_ended_timer_ == nullptr) {
+            call_ui_state_ = UI_CALL_IDLE;
+            ui_call_set_state(UI_CALL_IDLE);
+        }
+    }
+}
+
+void SmartGadgetDisplay::HandleCallPrimaryAction() {
+    if (call_ui_state_ == UI_CALL_IDLE || call_ui_state_ == UI_CALL_ENDED) {
+        Application::GetInstance().StartListening();
+    } else {
+        Application::GetInstance().HangupChat();
+    }
+}
+
+void SmartGadgetDisplay::HandleCallRightAction() {
+    if (call_ui_state_ == UI_CALL_SPEAKING) {
+        Application::GetInstance().StartListening();
+    }
 }
 
 void SmartGadgetDisplay::SetTheme(Theme* theme) {
@@ -1393,6 +1601,11 @@ void SmartGadgetDisplay::HandleTouchSwipe(int32_t delta_x, int32_t delta_y) {
         return;
     }
 
+    if (page == kPageDevice && ui_Device_is_detail_visible()) {
+        ui_Device_return_to_overview();
+        return;
+    }
+
     int next_page = page + (delta_x < 0 ? 1 : -1);
     if (next_page < kPageClock) {
         next_page = kPageDevice;
@@ -1400,6 +1613,34 @@ void SmartGadgetDisplay::HandleTouchSwipe(int32_t delta_x, int32_t delta_y) {
         next_page = kPageClock;
     }
     LoadPage(static_cast<PageIndex>(next_page));
+}
+
+bool SmartGadgetDisplay::OpenPage(ExternalPage page) {
+    if (!setup_ui_called_) {
+        return false;
+    }
+
+    DisplayLockGuard lock(this);
+    switch (page) {
+    case ExternalPage::Clock:
+        LoadPage(kPageClock);
+        break;
+    case ExternalPage::Focus:
+        LoadPage(kPageToday);
+        break;
+    case ExternalPage::Music:
+        LoadPage(kPageMusic);
+        break;
+    case ExternalPage::Weather:
+        LoadPage(kPageWeather);
+        break;
+    case ExternalPage::Device:
+        LoadPage(kPageDevice);
+        break;
+    default:
+        return false;
+    }
+    return true;
 }
 
 void SmartGadgetDisplay::LoadPage(PageIndex page) {
